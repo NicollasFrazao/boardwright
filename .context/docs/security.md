@@ -1,0 +1,57 @@
+---
+type: doc
+name: security
+description: Threat model, tokens and credentials, the trigger and guard rails, known gaps, how to report a vulnerability
+category: security
+generated: 2026-11-24
+status: filled
+scaffoldVersion: "2.0.0"
+---
+
+# Security
+
+## Security & Compliance Notes
+
+boardwright gives an agent write access to repositories. The security model is that the agent can do
+no more than its stage allows, whatever the issue text says, and that the people who can start it are
+the people who could have made the change themselves.
+
+## Threat model
+
+| Threat | Control |
+| --- | --- |
+| A stranger's issue steers an agent | The trigger label counts only when added by someone with triage access |
+| Prompt injection asks the agent to edit CI or exfiltrate secrets | Path denylist (`.github/workflows/**`, secret files) in the session and on the diff; tokens never in the agent environment beyond what the stage needs |
+| An agent merges unreviewed code | No merge outside the opt-in merge stage; its policy is deterministic code, and auto-merge still passes the ruleset |
+| A token with bypass rights skips the ruleset | Tokens need no bypass; the docs require tokens without it |
+| Runaway cost or loops | `maxTurns`, timeout and `maxAttempts` per stage; one run per item |
+| Two runners act on the same item | The claim marker and idempotent actions |
+
+## Authentication & Authorization
+
+- **Board token:** classic token with the `project` scope (user projects are not reachable with the
+  default `GITHUB_TOKEN`).
+- **Repository token:** fine-grained, contents/pull requests/issues read-write on the allowlisted
+  repositories; pull requests opened with the default token do not trigger CI.
+- **Merge token (opt-in):** separate from the token that opened the pull request.
+- **Agent credentials:** never stored or managed by boardwright. The runner uses the login already on
+  the machine or `ANTHROPIC_API_KEY`; the Action uses a repository secret. See
+  [ADR 0002](./adr/0002-local-runner-and-action.md).
+
+## Secrets & Sensitive Data
+
+Tokens are read only in the composition roots, never logged, never written to a marker, comment,
+artifact or dotcontext harness trace. Logs are JSON and redact any value read from a secret.
+
+## Known gaps
+
+- The issue text is untrusted input to a model; the controls above limit what it can cause, not what
+  it can say. Labelling an issue is a trust decision.
+- Subscription use through the Agent SDK in third-party tools: the current terms are checked in #5
+  and the result recorded here.
+
+## Incident Response
+
+Report vulnerabilities privately through
+[private vulnerability reporting](https://github.com/NicollasFrazao/boardwright/security/advisories/new);
+see `SECURITY.md` for scope.
