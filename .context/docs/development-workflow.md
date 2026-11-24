@@ -19,7 +19,7 @@ Every change goes: issue on the roadmap (#1) → branch → commits → local ga
 ## Setup
 
 ```bash
-nvm use 24        # Node 24 is the runtime of CI, the runner and the Action
+nvm use 26        # Node 26, the active LTS, is the runtime of CI and the runner
 npm ci            # dependencies and the git hooks (husky)
 ```
 
