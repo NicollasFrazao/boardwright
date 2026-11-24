@@ -7,9 +7,8 @@ import {
   type StageContext,
 } from '@boardwright/core';
 import {
-  exists,
-  listNames,
-  readText,
+  localFiles,
+  type FileSource,
 } from './files.ts';
 import { readFrontMatter } from './front-matter.ts';
 
@@ -41,17 +40,28 @@ interface Scan<T> {
  * built-in agents and skills, including ones a repository removed on purpose, so it is not used here.
  */
 export class DotcontextProvider implements ContextProvider {
+  private readonly files: FileSource;
+
+  constructor(files: FileSource = localFiles) {
+    this.files = files;
+  }
+
   /** The playbook named by the selector and the skills of its phase. */
   async load(
     root: string,
     selector: ContextSelector,
   ): Promise<StageContext> {
+    const reader = {
+      files: this.files,
+      root,
+    };
+
     const [
       agents,
       skills,
     ] = await Promise.all([
-      scanAgents(root),
-      scanSkills(root),
+      scanAgents(reader),
+      scanSkills(reader),
     ]);
 
     const warnings = [
@@ -80,7 +90,7 @@ export class DotcontextProvider implements ContextProvider {
           description: skill.description,
           path: skill.path,
         })),
-      instructionFiles: await exists(
+      instructionFiles: await this.files.exists(
         root,
         CONTEXT_INDEX,
       ) ? [CONTEXT_INDEX] : [],
@@ -89,22 +99,27 @@ export class DotcontextProvider implements ContextProvider {
   }
 }
 
-async function scanAgents(root: string): Promise<Scan<AgentFile>> {
+interface Reader {
+  readonly files: FileSource;
+  readonly root: string;
+}
+
+async function scanAgents(reader: Reader): Promise<Scan<AgentFile>> {
   const scan: Scan<AgentFile> = {
     items: [],
     warnings: [],
   };
 
-  const names = (await listNames(
-    root,
+  const names = await reader.files.listNames(
+    reader.root,
     AGENTS_DIRECTORY,
-  )).filter((name) => name.endsWith('.md') && name !== 'README.md');
+  );
 
-  for (const name of names) {
+  for (const name of names.filter((entry) => entry.endsWith('.md') && entry !== 'README.md')) {
     const path = `${AGENTS_DIRECTORY}/${name}`;
 
     const data = await frontMatterOf(
-      root,
+      reader,
       path,
       scan.warnings,
     );
@@ -125,25 +140,27 @@ async function scanAgents(root: string): Promise<Scan<AgentFile>> {
   return scan;
 }
 
-async function scanSkills(root: string): Promise<Scan<SkillFile>> {
+async function scanSkills(reader: Reader): Promise<Scan<SkillFile>> {
   const scan: Scan<SkillFile> = {
     items: [],
     warnings: [],
   };
 
-  for (const name of await listNames(
-    root,
+  for (const name of await reader.files.listNames(
+    reader.root,
     SKILLS_DIRECTORY,
   )) {
     const path = `${SKILLS_DIRECTORY}/${name}/SKILL.md`;
 
-    if (await exists(
-      root,
+    const text = await reader.files.readText(
+      reader.root,
       path,
-    )) {
-      const data = await frontMatterOf(
-        root,
+    );
+
+    if (text !== undefined) {
+      const data = parseFrontMatter(
         path,
+        text,
         scan.warnings,
       );
 
@@ -160,15 +177,35 @@ async function scanSkills(root: string): Promise<Scan<SkillFile>> {
 }
 
 async function frontMatterOf(
-  root: string,
+  reader: Reader,
   path: string,
   warnings: string[],
 ): Promise<Record<string, unknown> | undefined> {
+  const text = await reader.files.readText(
+    reader.root,
+    path,
+  );
+
+  if (text === undefined) {
+    warnings.push(`${path}: could not be read.`);
+
+    return undefined;
+  }
+
+  return parseFrontMatter(
+    path,
+    text,
+    warnings,
+  );
+}
+
+function parseFrontMatter(
+  path: string,
+  text: string,
+  warnings: string[],
+): Record<string, unknown> | undefined {
   try {
-    const data = readFrontMatter(await readText(
-      root,
-      path,
-    ));
+    const data = readFrontMatter(text);
 
     if (data === undefined) {
       warnings.push(`${path}: no front matter.`);

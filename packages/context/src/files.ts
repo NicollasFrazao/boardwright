@@ -5,53 +5,73 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 
-/** Whether a path exists under `root`. */
-export async function exists(
-  root: string,
-  relativePath: string,
-): Promise<boolean> {
-  try {
-    await access(join(
-      root,
-      relativePath,
-    ));
+/**
+ * Where a provider reads a repository's files: a local checkout, or the repository through its host's API.
+ *
+ * @remarks
+ * `root` is what locates the repository in the source: a directory for a checkout, `owner/name` for an API.
+ */
+export interface FileSource {
+  exists(root: string, path: string): Promise<boolean>;
 
-    return true;
-  } catch {
-    return false;
-  }
+  /** The names in a directory, sorted; empty when it does not exist. */
+  listNames(root: string, path: string): Promise<string[]>;
+
+  /** A UTF-8 file; `undefined` when it does not exist. */
+  readText(root: string, path: string): Promise<string | undefined>;
 }
 
-/** The names in a directory under `root`, sorted; empty when the directory does not exist. */
-export async function listNames(
-  root: string,
-  relativePath: string,
-): Promise<string[]> {
-  try {
-    const entries = await readdir(join(
-      root,
-      relativePath,
-    ));
+/** Files of a local checkout, `root` being its directory. */
+export const localFiles: FileSource = {
+  async exists(
+    root,
+    path,
+  ) {
+    try {
+      await access(join(
+        root,
+        path,
+      ));
 
-    return entries.sort((
-      left,
-      right,
-    ) => left.localeCompare(right));
-  } catch {
-    return [];
-  }
-}
+      return true;
+    } catch {
+      return false;
+    }
+  },
 
-/** A UTF-8 file under `root`. */
-export function readText(
-  root: string,
-  relativePath: string,
-): Promise<string> {
-  return readFile(
-    join(
-      root,
-      relativePath,
-    ),
-    'utf8',
-  );
-}
+  async listNames(
+    root,
+    path,
+  ) {
+    try {
+      const names = await readdir(join(
+        root,
+        path,
+      ));
+
+      return names.sort((
+        left,
+        right,
+      ) => left.localeCompare(right));
+    } catch {
+      return [];
+    }
+  },
+
+  async readText(
+    root,
+    path,
+  ) {
+    try {
+      return await readFile(
+        join(
+          root,
+          path,
+        ),
+        'utf8',
+      );
+    } catch {
+      return undefined;
+    }
+  },
+};

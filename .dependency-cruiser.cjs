@@ -37,14 +37,14 @@ module.exports = {
       name: 'core-imports-no-other-package',
       severity: 'error',
       comment: 'The core is what every runtime shares; it never depends on an adapter or an entry point.',
-      from: { path: '^packages/core/' },
+      from: { path: '^packages/core/src/' },
       to: { path: '^packages/(?!core/)' },
     },
     {
       name: 'adapters-import-only-the-core',
       severity: 'error',
       comment: 'An adapter (GitHub, the context base, an agent provider) implements a core port; adapters never import each other.',
-      from: { path: '^packages/(github|context|agent-[^/]+)/' },
+      from: { path: '^packages/(github|context|agent-[^/]+)/src/' },
       to: { path: '^packages/(?!core/)(?!$1/)' },
     },
     {
@@ -60,6 +60,13 @@ module.exports = {
       comment: 'The runner and the action are composition roots: they import everything, nothing imports them.',
       from: { pathNot: '^packages/(runner|action)/' },
       to: { path: '^packages/(runner|action)/' },
+    },
+    {
+      name: 'production-code-does-not-import-test-doubles',
+      severity: 'error',
+      comment: 'packages/testing holds fakes and the GitHub replay for tests; no shipped code may depend on it.',
+      from: { path: '^packages/(?!testing/)[^/]+/src/' },
+      to: { path: '^packages/testing/' },
     },
     {
       name: 'production-code-does-not-import-tests',

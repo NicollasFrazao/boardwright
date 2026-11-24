@@ -14,7 +14,7 @@ import {
   firstStage,
   ISSUE,
   scenario,
-} from './fakes.ts';
+} from '@boardwright/testing';
 
 function implementRun(labels: string[] = ['agent']): ImplementRun {
   const config = baseConfig();

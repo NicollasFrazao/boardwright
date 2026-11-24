@@ -12,7 +12,7 @@ import {
 import {
   baseConfig,
   firstStage,
-} from './fakes.ts';
+} from '@boardwright/testing';
 
 describe('parsePipelineConfig', () => {
   it('fills every default the docs promise', () => {
