@@ -13,7 +13,7 @@ import {
   ISSUE,
   keyOf,
   scenario,
-} from './fakes.ts';
+} from '@boardwright/testing';
 
 const HOUR = 3_600_000;
 

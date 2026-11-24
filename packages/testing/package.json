@@ -1,0 +1,14 @@
+{
+  "name": "@boardwright/testing",
+  "version": "0.0.0",
+  "description": "Test doubles of the boardwright ports and a GitHub API replay, shared by the packages' tests. Never published.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@boardwright/core": "0.0.0"
+  }
+}

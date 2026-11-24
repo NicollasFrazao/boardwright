@@ -2,6 +2,7 @@ import type {
   AgentProvider,
   AgentRequest,
   AgentResult,
+  BoardDescription,
   BoardItem,
   BoardPort,
   Clock,
@@ -22,8 +23,8 @@ import type {
   Workspace,
   WorkspacePort,
   WorkspaceRequest,
-} from '../src/index.ts';
-import { parsePipelineConfig } from '../src/index.ts';
+} from '@boardwright/core';
+import { parsePipelineConfig } from '@boardwright/core';
 
 /** `owner/name#number`, the key the fakes store issues under. */
 export function keyOf(ref: IssueRef): string {
@@ -31,7 +32,7 @@ export function keyOf(ref: IssueRef): string {
 }
 
 /** A clock that only moves when a test moves it. */
-class FakeClock implements Clock {
+export class FakeClock implements Clock {
   private current: Date;
 
   constructor(iso = '2026-11-24T12:00:00Z') {
@@ -50,14 +51,35 @@ class FakeClock implements Clock {
 }
 
 /** An in-memory board. */
-class FakeBoard implements BoardPort {
+export class FakeBoard implements BoardPort {
   /** Every Status change, in order. */
   readonly moves: {
     itemId: string;
     status: string;
   }[] = [];
 
-  constructor(readonly items: BoardItem[]) {}
+  /** The board's Status options; `undefined` plays a board without the Status field. */
+  statusOptions: string[] | undefined = [
+    'Todo',
+    'Ready',
+    'In Progress',
+    'In review',
+    'Done',
+  ];
+
+  readonly items: BoardItem[];
+
+  constructor(items: BoardItem[]) {
+    this.items = items;
+  }
+
+  /** The title and the Status options the test set. */
+  describe(): Promise<BoardDescription> {
+    return Promise.resolve({
+      title: 'Roadmap',
+      statusOptions: this.statusOptions,
+    });
+  }
 
   /** A copy of the items. */
   listItems(): Promise<BoardItem[]> {
@@ -96,7 +118,7 @@ class FakeBoard implements BoardPort {
 }
 
 /** An in-memory repository host. */
-class FakeRepoHost implements RepoHostPort {
+export class FakeRepoHost implements RepoHostPort {
   readonly issues = new Map<string, Issue>();
 
   readonly comments = new Map<string, IssueComment[]>();
@@ -107,12 +129,61 @@ class FakeRepoHost implements RepoHostPort {
 
   readonly drafts: PullRequestDraft[] = [];
 
+  /** Repositories that answer every request with an error. */
+  readonly unreachable = new Set<string>();
+
+  /** Labels per repository. */
+  readonly labels = new Map<string, Set<string>>();
+
+  /** Files on the default branch, keyed `owner/name:path`. */
+  readonly files = new Map<string, string>();
+
   /** Called after each comment is stored; a test uses it to play a competing runner. */
   afterComment: ((ref: IssueRef, body: string) => void) | undefined;
 
   private sequence = 0;
 
-  constructor(private readonly clock: FakeClock) {}
+  private readonly clock: FakeClock;
+
+  constructor(clock: FakeClock) {
+    this.clock = clock;
+  }
+
+  /** Whether the test added the label to the repository. */
+  hasLabel(
+    repository: string,
+    label: string,
+  ): Promise<boolean> {
+    return Promise.resolve(this.labels.get(repository)?.has(label) ?? false);
+  }
+
+  /** The stored file. */
+  readFile(
+    repository: string,
+    path: string,
+  ): Promise<string | undefined> {
+    return Promise.resolve(this.files.get(`${repository}:${path}`));
+  }
+
+  /** The names under a directory, derived from the stored files. */
+  listDirectory(
+    repository: string,
+    path: string,
+  ): Promise<string[]> {
+    const prefix = `${repository}:${path}/`;
+    const names = new Set<string>();
+
+    for (const key of this.files.keys()) {
+      if (key.startsWith(prefix)) {
+        names.add(key.slice(prefix.length).split('/')[0] ?? '');
+      }
+    }
+
+    return Promise.resolve([...names].sort((
+      left,
+      right,
+    ) => left.localeCompare(right)));
+  }
 
   /** The stored issue; rejects when there is none. */
   getIssue(ref: IssueRef): Promise<Issue> {
@@ -179,9 +250,9 @@ class FakeRepoHost implements RepoHostPort {
     return (this.comments.get(keyOf(ref)) ?? []).map((comment) => comment.body);
   }
 
-  /** Always `master`. */
-  getDefaultBranch(): Promise<string> {
-    return Promise.resolve('master');
+  /** `master`; rejects for a repository the test made unreachable. */
+  getDefaultBranch(repository: string): Promise<string> {
+    return this.unreachable.has(repository) ? Promise.reject(new Error('Not Found')) : Promise.resolve('master');
   }
 
   /** The open pull request stored for the branch. */
@@ -211,7 +282,7 @@ class FakeRepoHost implements RepoHostPort {
 }
 
 /** Workspaces that record what was done with them. */
-class FakeWorkspaces implements WorkspacePort {
+export class FakeWorkspaces implements WorkspacePort {
   changed: string[] = ['src/feature.ts'];
 
   readonly prepared: Workspace[] = [];
@@ -253,7 +324,7 @@ class FakeWorkspaces implements WorkspacePort {
 }
 
 /** An agent that returns a fixed result, or throws. */
-class FakeAgent implements AgentProvider {
+export class FakeAgent implements AgentProvider {
   result: AgentResult = {
     status: 'completed',
     summary: 'Done.',
@@ -308,7 +379,7 @@ export class FakeContext implements ContextProvider {
 }
 
 /** Run ids `run-1`, `run-2`, … */
-class SequentialRunIds implements RunIdSource {
+export class SequentialRunIds implements RunIdSource {
   private count = 0;
 
   /** The next sequential id. */
@@ -320,7 +391,7 @@ class SequentialRunIds implements RunIdSource {
 }
 
 /** A logger that keeps what it was given. */
-class MemoryLogger implements Logger {
+export class MemoryLogger implements Logger {
   readonly entries: {
     level: 'info' | 'warn';
     event: string;
@@ -433,6 +504,11 @@ export function scenario(config: PipelineConfig = baseConfig()): Scenario {
       login: 'maintainer',
       permission: 'maintain',
     },
+  );
+
+  repoHost.labels.set(
+    ISSUE.repository,
+    new Set(['agent']),
   );
 
   return {

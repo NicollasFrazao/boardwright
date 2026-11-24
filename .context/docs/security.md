@@ -30,7 +30,11 @@ the people who could have made the change themselves.
 ## Authentication & Authorization
 
 - **Board token:** classic token with the `project` scope (user projects are not reachable with the
-  default `GITHUB_TOKEN`).
+  default `GITHUB_TOKEN`). The CLI reads it from `BOARDWRIGHT_GITHUB_TOKEN`, `GITHUB_TOKEN` or
+  `GH_TOKEN`, in that order, and hands it only to the Octokit client, whose request log is silenced.
+- **Who released an issue:** the most recent person who added the trigger label, read from the issue's
+  events, with their role from the collaborator permission API. A bot or a non-collaborator has no
+  permission, so it can never start an agent.
 - **Repository token:** fine-grained, contents/pull requests/issues read-write on the allowlisted
   repositories; pull requests opened with the default token do not trigger CI.
 - **Merge token (opt-in):** separate from the token that opened the pull request.

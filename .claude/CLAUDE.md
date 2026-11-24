@@ -65,7 +65,10 @@ develops others:
 
 - `packages/core/` — domain (markers, run decisions, guard rails) and application (config, ports, `tick()`)
 - `packages/context/` — the `ContextProvider` adapters: dotcontext base and plain fallback
-- `packages/` — `github`, `agent-claude` and `runner` land in #4, #5 and #8
+- `packages/github/` — the GitHub adapters: the Projects v2 board and the repository host
+- `packages/runner/` — the CLI: `doctor`, `once --dry-run`, `init`
+- `packages/testing/` — fakes of every port and the GitHub API replay, for tests only
+- `packages/agent-claude/` — the Claude provider, in #5
 - `eslint-rules/` — local readability rules, with RuleTester tests
 - `scripts/` — `check-context-surfaces.mjs` (export and check of the agent surfaces)
 - `.context/` — this knowledge base

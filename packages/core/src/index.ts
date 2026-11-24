@@ -62,3 +62,10 @@ export {
   type TickOptions,
   type TickReport,
 } from './application/tick.ts';
+export {
+  diagnose,
+  type CheckStatus,
+  type DoctorCheck,
+  type DoctorDependencies,
+  type DoctorReport,
+} from './application/doctor.ts';

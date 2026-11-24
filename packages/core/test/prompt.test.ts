@@ -11,7 +11,7 @@ import {
 import {
   FakeContext,
   ISSUE,
-} from './fakes.ts';
+} from '@boardwright/testing';
 
 const issue = {
   ref: ISSUE,

@@ -23,6 +23,18 @@ under your rulesets and required checks.
   (required checks, unresolved threads, review verdict, path denylist, size), through native
   auto-merge, never by bypassing the ruleset.
 
+## Try it
+
+Nothing is published yet; from a clone, with Node 24:
+
+```bash
+npm ci
+export GITHUB_TOKEN=$(gh auth token)   # a token that can read your board (project scope) and repositories
+npm run boardwright -- init --owner <login> --project <number> --repository <owner/name>
+npm run boardwright -- doctor          # checks the config against the board; changes nothing
+npm run boardwright -- once --dry-run  # prints what one tick would do; changes nothing
+```
+
 ## Safety model
 
 An agent can do no more than its stage allows: no push to the base branch, no force-push, no changes

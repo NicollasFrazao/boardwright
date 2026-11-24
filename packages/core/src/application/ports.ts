@@ -14,11 +14,22 @@ export interface BoardItem {
 
 /** The board: a GitHub Project (v2) and its Status field. */
 export interface BoardPort {
+  /** The board's title and the options of its Status field. */
+  describe(): Promise<BoardDescription>;
+
   /** Every item of the board whose content is an issue. */
   listItems(): Promise<BoardItem[]>;
 
   /** Moves an item to a Status option that already exists on the board. */
   setStatus(itemId: string, status: string): Promise<void>;
+}
+
+/** What `doctor` checks the config against. */
+export interface BoardDescription {
+  readonly title: string;
+
+  /** The options of the Status field; `undefined` when the board has no field with the configured name. */
+  readonly statusOptions: readonly string[] | undefined;
 }
 
 /** An issue as the pipeline needs it. */
@@ -67,6 +78,14 @@ export interface RepoHostPort {
   findOpenPullRequest(repository: string, head: string): Promise<PullRequest | undefined>;
 
   openPullRequest(draft: PullRequestDraft): Promise<PullRequest>;
+
+  hasLabel(repository: string, label: string): Promise<boolean>;
+
+  /** A file on the default branch; `undefined` when it does not exist. */
+  readFile(repository: string, path: string): Promise<string | undefined>;
+
+  /** The names in a directory on the default branch; empty when it does not exist. */
+  listDirectory(repository: string, path: string): Promise<string[]>;
 }
 
 /** A checkout prepared for one run. */

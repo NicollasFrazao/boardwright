@@ -41,6 +41,18 @@ No token is needed to develop: the core is tested with fake ports.
 
 The full table, with what each one catches, is in [tooling.md](tooling.md).
 
+## Running the CLI against a real board
+
+```bash
+export GITHUB_TOKEN=$(gh auth token)       # or BOARDWRIGHT_GITHUB_TOKEN; needs the project scope for a user's board
+npm run boardwright -- init --owner <login> --project <number> --repository <owner/name>
+npm run boardwright -- doctor               # config vs board and repositories; exit 1 on a failure
+npm run boardwright -- once --dry-run       # what one tick would do; writes nothing
+```
+
+`--config <path>` reads another file; `--json` prints the report as JSON. `once` without `--dry-run` is
+refused until the workspace and agent adapters land (#5).
+
 ## Branching & Releases
 
 - Branch from `master` with a prefix (`feat/`, `fix/`, `docs/`, `refactor/`, `chore/`, `test/`, `ci/`).

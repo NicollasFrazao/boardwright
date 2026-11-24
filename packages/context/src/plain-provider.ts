@@ -2,7 +2,10 @@ import type {
   ContextProvider,
   StageContext,
 } from '@boardwright/core';
-import { exists } from './files.ts';
+import {
+  localFiles,
+  type FileSource,
+} from './files.ts';
 
 /** The files coding agents conventionally read, in the order they are listed to the agent. */
 export const INSTRUCTION_FILES: readonly string[] = [
@@ -13,12 +16,18 @@ export const INSTRUCTION_FILES: readonly string[] = [
 
 /** Reads a repository without a dotcontext base: whichever of `AGENTS.md` and `CLAUDE.md` it has. */
 export class PlainContextProvider implements ContextProvider {
+  private readonly files: FileSource;
+
+  constructor(files: FileSource = localFiles) {
+    this.files = files;
+  }
+
   /** The instruction files present at `root`; a warning when there are none. */
   async load(root: string): Promise<StageContext> {
     const present: string[] = [];
 
     for (const path of INSTRUCTION_FILES) {
-      if (await exists(
+      if (await this.files.exists(
         root,
         path,
       )) {

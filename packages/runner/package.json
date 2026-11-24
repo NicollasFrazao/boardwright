@@ -1,0 +1,17 @@
+{
+  "name": "@boardwright/runner",
+  "version": "0.0.0",
+  "description": "The boardwright command line: doctor, init and once.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "boardwright": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@boardwright/context": "0.0.0",
+    "@boardwright/core": "0.0.0",
+    "@boardwright/github": "0.0.0",
+    "yaml": "2.9.1"
+  }
+}

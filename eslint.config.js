@@ -182,9 +182,12 @@ export default tseslint.config(
   },
 
   {
-    // Tests: amounts written as literals are the readable form of a test case,
-    // and repeated literal URLs and messages are the assertions themselves.
-    files: ['packages/*/test/**/*.ts'],
+    // Tests and the shared test doubles (packages/testing): amounts written as literals are
+    // the readable form of a test case, and repeated literal URLs and messages are the assertions.
+    files: [
+      'packages/*/test/**/*.ts',
+      'packages/testing/src/**/*.ts',
+    ],
     rules: {
       '@typescript-eslint/no-magic-numbers': 'off',
       'sonarjs/no-duplicate-string': 'off',
