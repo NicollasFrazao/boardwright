@@ -25,7 +25,7 @@ under your rulesets and required checks.
 
 ## Try it
 
-Nothing is published yet; from a clone, with Node 24:
+Nothing is published yet; from a clone, with Node 26 (the active LTS):
 
 ```bash
 npm ci

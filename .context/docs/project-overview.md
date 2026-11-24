@@ -26,7 +26,7 @@ through the same flow a person would, with the same rulesets and checks.
 ## Quick Facts
 
 - Root: the repository root; npm workspaces under `packages/`.
-- Language: TypeScript (strict, ESM) on Node 24.
+- Language: TypeScript (strict, ESM) on Node 26, the active LTS.
 - Entry points (planned): the CLI in `packages/runner/src/cli.ts` and the Action in `action/`.
 - Roadmap: umbrella issue #1, one sub-issue per phase (#2–#9).
 
@@ -55,7 +55,7 @@ the merge policy. Everything else is internal.
 
 ## Technology Stack Summary
 
-Node 24 and TypeScript 5.9 in strict mode with ESM. ESLint 10 with typescript-eslint
+Node 26 and TypeScript 5.9 in strict mode with ESM. ESLint 10 with typescript-eslint
 `strictTypeChecked`, `eslint-plugin-sonarjs` and local readability rules; knip and dependency-cruiser;
 Vitest 5 with v8 coverage. Runtime dependencies are added per package as they land: zod (config),
 Octokit and GraphQL (GitHub), `@anthropic-ai/claude-agent-sdk` (Claude provider) and the dotcontext MCP

@@ -56,7 +56,7 @@ Enforced by `npm run check:architecture`. See [architecture.md](architecture.md)
 
 ## TypeScript that runs without a build
 
-The source runs on Node 24 as it is (`npm run boardwright -- doctor`), so it uses only TypeScript that
+The source runs on Node 26 as it is (`npm run boardwright -- doctor`), so it uses only TypeScript that
 Node can erase: no `enum`, no `namespace`, no parameter properties (`constructor(private x)`). Declare
 the field and assign it. `erasableSyntaxOnly` in `tsconfig.json` enforces this; relative imports name
 the `.ts` file.

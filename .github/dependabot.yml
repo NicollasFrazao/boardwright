@@ -9,7 +9,7 @@ updates:
       prefix: build
       include: scope
     ignore:
-      # The runtime is Node 24 (CI, the runner, the Action); its types move with it, not ahead of it.
+      # The runtime is Node 26 (CI and the runner); its types move with it, not ahead of it.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
       # typescript-eslint has no support for TypeScript 7 yet; revisit when it does.
