@@ -44,6 +44,7 @@ describe('the implement prompt built from a real base', () => {
         path: root,
         branch: 'agent/issue-12',
         base: 'master',
+        startSha: 'start00',
       },
       context,
       deniedPaths: DEFAULT_DENIED_PATHS,

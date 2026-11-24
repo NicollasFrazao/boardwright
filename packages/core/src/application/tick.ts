@@ -54,6 +54,7 @@ export type SkipReason =
   | 'not-triggered'
   | 'trigger-without-triage'
   | 'no-pull-request'
+  | 'no-feedback'
   | 'in-flight'
   | 'up-to-date'
   | 'gave-up'

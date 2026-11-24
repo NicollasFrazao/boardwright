@@ -83,6 +83,7 @@ const agentReport = z.object({
   summary: z.string(),
   pullRequestTitle: z.string().min(1).optional(),
   pullRequestBody: z.string().optional(),
+  addressedThreadIds: z.array(z.string()).optional(),
 });
 
 /** The structured output every session must end with. */
@@ -404,6 +405,7 @@ function toAgentResult(
       body: pullRequestBody ?? '',
     },
     review: undefined,
+    addressedThreadIds: report.data.addressedThreadIds ?? [],
   };
 }
 
@@ -418,6 +420,7 @@ function toReviewResult(output: unknown): AgentResult {
     status: report.data.status,
     summary: report.data.summary,
     pullRequest: undefined,
+    addressedThreadIds: [],
     review: report.data.status === 'completed'
       ? {
           verdict: report.data.verdict,
@@ -437,5 +440,6 @@ function failed(summary: string): AgentResult {
     summary,
     pullRequest: undefined,
     review: undefined,
+    addressedThreadIds: [],
   };
 }

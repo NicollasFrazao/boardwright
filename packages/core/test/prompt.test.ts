@@ -26,6 +26,7 @@ const workspace = {
   path: '/work/worktrees/agent/issue-7',
   branch: 'agent/issue-7',
   base: 'master',
+  startSha: 'start00',
 };
 
 describe('buildImplementPrompt', () => {

@@ -146,6 +146,7 @@ describe('runImplementStage', () => {
       summary: 'Which endpoint should the feature use?',
       pullRequest: undefined,
       review: undefined,
+      addressedThreadIds: [],
     };
 
     const outcome = await runImplementStage(
@@ -191,6 +192,7 @@ describe('runImplementStage', () => {
       summary: 'Done.',
       pullRequest: undefined,
       review: undefined,
+      addressedThreadIds: [],
     };
 
     await runImplementStage(

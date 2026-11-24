@@ -210,6 +210,8 @@ describe('ClaudeAgentProvider: what the session reports', () => {
         title: 'feat(app): add the feature',
         body: 'Adds it.',
       },
+      review: undefined,
+      addressedThreadIds: [],
     });
   });
 
@@ -225,6 +227,8 @@ describe('ClaudeAgentProvider: what the session reports', () => {
       status: 'blocked',
       summary: 'Which endpoint?',
       pullRequest: undefined,
+      review: undefined,
+      addressedThreadIds: [],
     });
   });
 
@@ -271,6 +275,8 @@ describe('ClaudeAgentProvider: what the session reports', () => {
       status: 'failed',
       summary: 'The agent session failed: could not start Claude Code',
       pullRequest: undefined,
+      review: undefined,
+      addressedThreadIds: [],
     });
   });
 
@@ -474,6 +480,7 @@ describe('ClaudeAgentProvider: review tasks', () => {
       status: 'completed',
       summary: 'One finding.',
       pullRequest: undefined,
+      addressedThreadIds: [],
       review: {
         verdict: 'changes',
         comments: [
@@ -501,5 +508,30 @@ describe('ClaudeAgentProvider: review tasks', () => {
       verdict: 'maybe',
       comments: [],
     })).status).toBe('failed');
+  });
+});
+
+describe('ClaudeAgentProvider: feedback rounds', () => {
+  it('returns the review threads the agent says it addressed', async () => {
+    const outcome = await new ClaudeAgentProvider({
+      query: replying([
+        result({
+          structured_output: {
+            status: 'completed',
+            summary: 'Fixed both.',
+            addressedThreadIds: [
+              'PRRT_1',
+              'PRRT_2',
+            ],
+          },
+        }),
+      ]).query,
+      environment: {},
+    }).run(request());
+
+    expect(outcome.addressedThreadIds).toEqual([
+      'PRRT_1',
+      'PRRT_2',
+    ]);
   });
 });

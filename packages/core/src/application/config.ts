@@ -69,11 +69,26 @@ const reviewStage = z.object({
   ...limitsOverride,
 }).strict();
 
+const addressFeedbackStage = z.object({
+  id: z.literal('address-feedback'),
+  when: z.object({ status: statusName }).prefault({ status: 'In review' }),
+  context: z.object({
+    phase: phase.default('E'),
+    agent: z.string().min(1).default('feature-developer'),
+    agentByLabel: z.record(
+      z.string(),
+      z.string().min(1),
+    ).default({ bug: 'bug-fixer' }),
+  }).prefault({}),
+  ...limitsOverride,
+}).strict();
+
 const stage = z.discriminatedUnion(
   'id',
   [
     implementStage,
     reviewStage,
+    addressFeedbackStage,
   ],
 );
 

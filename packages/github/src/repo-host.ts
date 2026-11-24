@@ -1,4 +1,5 @@
 import type {
+  Feedback,
   Issue,
   IssueComment,
   IssueRef,
@@ -16,6 +17,98 @@ import {
   splitRepository,
   type GitHubClient,
 } from './client.ts';
+
+const FEEDBACK_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes { id isResolved path line comments(last: 1) { nodes { body } } }
+      }
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              contexts(first: 100) {
+                nodes {
+                  ... on CheckRun { name conclusion }
+                  ... on StatusContext { context state }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+const RESOLVE_THREAD_MUTATION = `mutation($id: ID!) {
+  resolveReviewThread(input: { threadId: $id }) { thread { id } }
+}`;
+
+const FAILED_CONCLUSIONS: ReadonlySet<string> = new Set([
+  'FAILURE',
+  'TIMED_OUT',
+  'CANCELLED',
+  'ACTION_REQUIRED',
+  'STARTUP_FAILURE',
+]);
+
+const FAILED_STATES: ReadonlySet<string> = new Set([
+  'FAILURE',
+  'ERROR',
+]);
+
+interface CheckContext {
+  readonly name?: string;
+  readonly conclusion?: string | null;
+  readonly context?: string;
+  readonly state?: string;
+}
+
+interface CheckRollup {
+  readonly contexts: { readonly nodes: readonly CheckContext[] };
+}
+
+interface FeedbackQuery {
+  readonly repository: {
+    readonly pullRequest: {
+      readonly reviewThreads: {
+        readonly nodes: readonly {
+          readonly id: string;
+          readonly isResolved: boolean;
+          readonly path: string;
+          readonly line: number | null;
+          readonly comments: { readonly nodes: readonly { readonly body: string }[] };
+        }[];
+      };
+      readonly commits: {
+        readonly nodes: readonly {
+          readonly commit: { readonly statusCheckRollup: CheckRollup | null };
+        }[];
+      };
+    } | null;
+  } | null;
+}
+
+/** The name of a check run or a commit status that failed; nothing for one that passed or is running. */
+function failingCheckName(context: CheckContext): string[] {
+  if (
+    context.name !== undefined
+    && FAILED_CONCLUSIONS.has(context.conclusion ?? '')
+  ) {
+    return [context.name];
+  }
+
+  if (
+    context.context !== undefined
+    && FAILED_STATES.has(context.state ?? '')
+  ) {
+    return [context.context];
+  }
+
+  return [];
+}
 
 /** GitHub ids grow with time; padding keeps their string order equal to their creation order. */
 const COMMENT_ID_WIDTH = 20;
@@ -170,6 +263,55 @@ export class GitHubRepoHost implements RepoHostPort {
       url: data.html_url,
       headSha: data.head.sha,
     };
+  }
+
+  /**
+   * The unresolved review threads and the failing checks of the head commit, in one GraphQL query.
+   *
+   * @remarks
+   * Reads the first 100 threads and 100 checks; a pull request with more is beyond what one round fixes.
+   * Checks still running are not failing yet.
+   */
+  async getFeedback(
+    repository: string,
+    number: number,
+  ): Promise<Feedback> {
+    const {
+      owner,
+      repo,
+    } = splitRepository(repository);
+
+    const data = await this.client.graphql<FeedbackQuery>(
+      FEEDBACK_QUERY,
+      {
+        owner,
+        name: repo,
+        number,
+      },
+    );
+
+    const pullRequest = data.repository?.pullRequest;
+    const contexts = pullRequest?.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? [];
+
+    return {
+      threads: (pullRequest?.reviewThreads.nodes ?? [])
+        .filter((thread) => !thread.isResolved)
+        .map((thread) => ({
+          id: thread.id,
+          path: thread.path,
+          line: thread.line,
+          body: thread.comments.nodes[0]?.body ?? '',
+        })),
+      failingChecks: contexts.flatMap((context) => failingCheckName(context)),
+    };
+  }
+
+  /** Marks a review thread resolved. */
+  async resolveThread(threadId: string): Promise<void> {
+    await this.client.graphql(
+      RESOLVE_THREAD_MUTATION,
+      { id: threadId },
+    );
   }
 
   /** Whether a review carrying the pipeline's marker was posted for this head commit. */

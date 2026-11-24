@@ -672,3 +672,160 @@ describe('GitHubRepoHost: reviews', () => {
     await expect(host.submitReview(draft)).rejects.toMatchObject({ status: 500 });
   });
 });
+
+describe('GitHubRepoHost: feedback', () => {
+  function feedbackRoute(pullRequest: unknown): ReplayRoute {
+    return {
+      method: 'POST',
+      path: '/graphql',
+      query: 'reviewThreads',
+      body: { data: { repository: { pullRequest } } },
+    };
+  }
+
+  it('returns the unresolved threads with their latest comment and the failing checks only', async () => {
+    const {
+      host,
+      replay,
+    } = hostWith([
+      feedbackRoute({
+        reviewThreads: {
+          nodes: [
+            {
+              id: 'PRRT_1',
+              isResolved: false,
+              path: 'src/a.ts',
+              line: 3,
+              comments: { nodes: [{ body: 'Name it.' }] },
+            },
+            {
+              id: 'PRRT_2',
+              isResolved: true,
+              path: 'src/b.ts',
+              line: 1,
+              comments: { nodes: [{ body: 'Done.' }] },
+            },
+            {
+              id: 'PRRT_3',
+              isResolved: false,
+              path: 'README.md',
+              line: null,
+              comments: { nodes: [] },
+            },
+          ],
+        },
+        commits: {
+          nodes: [
+            {
+              commit: {
+                statusCheckRollup: {
+                  contexts: {
+                    nodes: [
+                      {
+                        name: 'test',
+                        conclusion: 'FAILURE',
+                      },
+                      {
+                        name: 'lint',
+                        conclusion: 'SUCCESS',
+                      },
+                      {
+                        name: 'CodeQL',
+                        conclusion: null,
+                      },
+                      {
+                        context: 'ci/legacy',
+                        state: 'ERROR',
+                      },
+                      {
+                        context: 'ci/ok',
+                        state: 'SUCCESS',
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ]);
+
+    expect(await host.getFeedback(
+      'acme/app',
+      9,
+    )).toEqual({
+      threads: [
+        {
+          id: 'PRRT_1',
+          path: 'src/a.ts',
+          line: 3,
+          body: 'Name it.',
+        },
+        {
+          id: 'PRRT_3',
+          path: 'README.md',
+          line: null,
+          body: '',
+        },
+      ],
+      failingChecks: [
+        'test',
+        'ci/legacy',
+      ],
+    });
+
+    expect(replay.nth(0).body).toMatchObject({
+      variables: {
+        owner: 'acme',
+        name: 'app',
+        number: 9,
+      },
+    });
+  });
+
+  it('returns no feedback for a pull request without checks or that cannot be read', async () => {
+    const { host } = hostWith([
+      feedbackRoute({
+        reviewThreads: { nodes: [] },
+        commits: { nodes: [{ commit: { statusCheckRollup: null } }] },
+      }),
+    ]);
+
+    expect(await host.getFeedback(
+      'acme/app',
+      9,
+    )).toEqual({
+      threads: [],
+      failingChecks: [],
+    });
+
+    const missing = hostWith([feedbackRoute(null)]);
+
+    expect(await missing.host.getFeedback(
+      'acme/app',
+      9,
+    )).toEqual({
+      threads: [],
+      failingChecks: [],
+    });
+  });
+
+  it('resolves a thread by its id', async () => {
+    const {
+      host,
+      replay,
+    } = hostWith([
+      {
+        method: 'POST',
+        path: '/graphql',
+        query: 'resolveReviewThread',
+        body: { data: { resolveReviewThread: { thread: { id: 'PRRT_1' } } } },
+      },
+    ]);
+
+    await host.resolveThread('PRRT_1');
+
+    expect(replay.nth(0).body).toMatchObject({ variables: { id: 'PRRT_1' } });
+  });
+});

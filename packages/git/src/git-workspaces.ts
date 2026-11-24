@@ -102,9 +102,18 @@ export class GitWorkspaces implements WorkspacePort {
       ],
     );
 
+    const startSha = (await this.git(
+      path,
+      [
+        'rev-parse',
+        'HEAD',
+      ],
+    )).trim();
+
     return {
       ...request,
       path,
+      startSha,
     };
   }
 
@@ -140,14 +149,14 @@ export class GitWorkspaces implements WorkspacePort {
     ) => left.localeCompare(right));
   }
 
-  /** Whether the branch has commits `base` does not. */
+  /** Whether the run committed anything after the worktree's starting commit. */
   async hasCommits(workspace: Workspace): Promise<boolean> {
     const count = await this.git(
       workspace.path,
       [
         'rev-list',
         '--count',
-        `origin/${workspace.base}..HEAD`,
+        `${workspace.startSha}..HEAD`,
       ],
     );
 

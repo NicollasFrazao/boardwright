@@ -49,7 +49,9 @@ export {
 export type * from './application/ports.ts';
 export {
   buildImplementPrompt,
+  buildFeedbackPrompt,
   buildReviewPrompt,
+  type FeedbackPromptInput,
   type ImplementPromptInput,
   type ReviewPromptInput,
 } from './application/prompt.ts';
@@ -85,3 +87,7 @@ export {
   type StageHandler,
   type StagePrecondition,
 } from './application/stages.ts';
+export {
+  hasFeedback,
+  runFeedbackStage,
+} from './application/feedback-stage.ts';
