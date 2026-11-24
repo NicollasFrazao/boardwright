@@ -20,7 +20,7 @@
     "test:unit": "vitest run --project unit",
     "test:tooling": "vitest run --project tooling",
     "test:coverage": "vitest run --coverage",
-    "check:architecture": "depcruise scripts eslint-rules --config .dependency-cruiser.cjs",
+    "check:architecture": "depcruise packages scripts eslint-rules --config .dependency-cruiser.cjs",
     "check:unused": "knip",
     "check:context": "node scripts/check-context-surfaces.mjs",
     "export:context": "node scripts/check-context-surfaces.mjs --write",

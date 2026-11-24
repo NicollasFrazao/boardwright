@@ -9,6 +9,12 @@
         "eslint-rules/**/*.mjs",
         "scripts/**/*.mjs"
       ]
+    },
+    "packages/*": {
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+      ]
     }
   }
 }

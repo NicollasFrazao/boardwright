@@ -1,7 +1,5 @@
 // Layer rules, checked by `npm run check:architecture`. The reasoning is in
-// .context/docs/architecture.md, "Layer rules". The package rules apply as each
-// package lands (core in #3, github in #4, agent-claude in #5, runner and action in #8);
-// the check runs over every directory that exists.
+// .context/docs/architecture.md, "Layer rules".
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -30,7 +28,7 @@ module.exports = {
       to: {
         pathNot: [
           '^packages/core/src/(domain|application)/',
-          '^zod$',
+          '^node_modules/zod/',
         ],
         dependencyTypesNot: ['core'],
       },
@@ -45,9 +43,16 @@ module.exports = {
     {
       name: 'adapters-import-only-the-core',
       severity: 'error',
-      comment: 'An adapter (GitHub, an agent provider) implements a core port; adapters never import each other.',
-      from: { path: '^packages/(github|agent-[^/]+)/' },
+      comment: 'An adapter (GitHub, the context base, an agent provider) implements a core port; adapters never import each other.',
+      from: { path: '^packages/(github|context|agent-[^/]+)/' },
       to: { path: '^packages/(?!core/)(?!$1/)' },
+    },
+    {
+      name: 'other-packages-use-only-the-core-api',
+      severity: 'error',
+      comment: 'Outside the core, only its public API (src/index.ts) is imported, so its internals can change freely.',
+      from: { path: '^packages/(?!core/)' },
+      to: { path: '^packages/core/src/(?!index\\.ts$)' },
     },
     {
       name: 'nothing-imports-an-entry-point',
