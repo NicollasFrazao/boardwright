@@ -48,7 +48,7 @@ Enforced by `npm run check:architecture`. See [architecture.md](architecture.md)
 - `packages/core/src/domain/` imports nothing outside itself except Node built-ins.
 - `packages/core/src/application/` imports only the domain and zod. It reaches GitHub, git, the agent
   and the context base through ports; it never imports an SDK.
-- `packages/core` imports no other package. An adapter (`context`, `github`, `agent-*`) imports only the
+- `packages/core` imports no other package. An adapter (`context`, `git`, `github`, `agent-*`) imports only the
   core, through its public API (`packages/core/src/index.ts`), never another adapter.
 - `packages/runner` and `action/` are composition roots: the only modules that read `process.env`,
   read tokens or construct clients. Nothing imports them.
