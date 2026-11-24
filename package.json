@@ -20,6 +20,7 @@
     "test:unit": "vitest run --project unit",
     "test:tooling": "vitest run --project tooling",
     "test:coverage": "vitest run --coverage",
+    "boardwright": "node packages/runner/src/cli.ts",
     "check:architecture": "depcruise packages scripts eslint-rules --config .dependency-cruiser.cjs",
     "check:unused": "knip",
     "check:context": "node scripts/check-context-surfaces.mjs",
