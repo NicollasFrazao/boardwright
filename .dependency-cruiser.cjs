@@ -43,8 +43,8 @@ module.exports = {
     {
       name: 'adapters-import-only-the-core',
       severity: 'error',
-      comment: 'An adapter (GitHub, the context base, an agent provider) implements a core port; adapters never import each other.',
-      from: { path: '^packages/(github|context|agent-[^/]+)/src/' },
+      comment: 'An adapter (GitHub, git, the context base, an agent provider) implements a core port; adapters never import each other.',
+      from: { path: '^packages/(github|git|context|agent-[^/]+)/src/' },
       to: { path: '^packages/(?!core/)(?!$1/)' },
     },
     {
