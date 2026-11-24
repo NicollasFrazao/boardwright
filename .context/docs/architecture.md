@@ -100,7 +100,7 @@ comment lets it try again.
 | refine (optional) | a column the board owner adds | P | Plan as an issue comment or a `.context/plans` file |
 | implement | Ready | E | Branch `agent/issue-N`, change, local gate, pull request with `Closes #N` |
 | review | In review | R | Reviews the head of `agent/issue-N`'s pull request read-only; posts a review that only comments, with line comments and a `<!-- boardwright:review v=1 verdict=… head=… -->` marker; never approves, never moves the card. A new push starts a new round; `maxAttempts` caps the rounds |
-| address-feedback | In review | E/V | Fixes for unresolved threads and failing checks, up to `maxAttempts` |
+| address-feedback | In review | E | When the pull request has unresolved review threads or failing checks: the agent commits fixes on its branch, the core checks them against the denylist, pushes without force and resolves only the known threads the agent says it addressed. Never moves the card; `maxAttempts` caps the rounds |
 | merge (opt-in) | In review | V | Native auto-merge when the merge policy passes |
 | document (opt-in) | Done | C | Pull request updating the `.context` docs the change touched |
 

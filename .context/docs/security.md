@@ -57,6 +57,9 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
 - for a review, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
   `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments; it
   never approves.
+- for address-feedback, the review comments and check names are fenced as input like the issue, and
+  only the core resolves threads: the agent names the ones it addressed, and the core resolves those
+  that were in the feedback it read.
 
 The git workspaces give the token to the runner's own `clone`, `fetch` and `push` through the commands'
 `GIT_CONFIG_*` environment; it is never written to `.git/config`, so the agent cannot read it, and its own
