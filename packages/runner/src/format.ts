@@ -1,5 +1,6 @@
 import type {
   DoctorReport,
+  ExecutionResult,
   PlannedAction,
   TickReport,
 } from '@boardwright/core';
@@ -32,17 +33,26 @@ export function formatDoctor(report: DoctorReport): string {
   return lines.join('\n');
 }
 
-/** A dry run's plan as lines for a terminal. */
-export function formatPlan(report: TickReport): string {
+/** A tick's report as lines for a terminal: the plan, and what came of each action unless it was a dry run. */
+export function formatTick(
+  report: TickReport,
+  isDryRun: boolean,
+): string {
+  const footer = isDryRun ? 'Dry run: nothing was written.' : 'Done.';
+
   if (report.entries.length === 0) {
-    return 'Nothing to do: no item is in a Status a stage starts from.\n\nDry run: nothing was written.';
+    return `Nothing to do: no item is in a Status a stage starts from.\n\n${footer}`;
   }
 
-  const lines = report.entries.map((entry) => `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`);
+  const lines = report.entries.map((entry) => {
+    const plan = `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`;
+
+    return entry.result === undefined ? plan : `${plan} → ${describeResult(entry.result)}`;
+  });
 
   lines.push(
     '',
-    'Dry run: nothing was written.',
+    footer,
   );
 
   return lines.join('\n');
@@ -60,5 +70,18 @@ function describeAction(action: PlannedAction): string {
       return `give up after ${action.attempts} attempts`;
     case 'run':
       return `run attempt ${action.attempt}`;
+  }
+}
+
+function describeResult(result: ExecutionResult): string {
+  switch (result.kind) {
+    case 'applied':
+      return 'done';
+    case 'lost-claim':
+      return 'another runner claimed it first';
+    case 'completed':
+      return `${result.outcome.event}: ${result.outcome.detail.split('\n')[0] ?? ''}`;
+    case 'error':
+      return `error: ${result.message}`;
   }
 }

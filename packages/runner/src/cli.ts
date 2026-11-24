@@ -3,12 +3,34 @@ import {
   readFile,
   writeFile,
 } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { ClaudeAgentProvider } from '@boardwright/agent-claude';
+import { GitWorkspaces } from '@boardwright/git';
 import {
   createGitHubClient,
   GitHubRepoHost,
   ProjectBoard,
 } from '@boardwright/github';
 import { runProgram } from './program.ts';
+
+function hasCode(
+  error: unknown,
+  code: string,
+): boolean {
+  return error instanceof Error && 'code' in error && error.code === code;
+}
+
+/** Where the clones and worktrees live: BOARDWRIGHT_CACHE_DIR, else the XDG cache directory. */
+function cacheDirectory(): string {
+  return process.env.BOARDWRIGHT_CACHE_DIR ?? join(
+    process.env.XDG_CACHE_HOME ?? join(
+      homedir(),
+      '.cache',
+    ),
+    'boardwright',
+  );
+}
 
 // The composition root: the only module that touches the process, the file system and the token.
 process.exitCode = await runProgram(
@@ -19,11 +41,10 @@ process.exitCode = await runProgram(
       path,
       'utf8',
     ).catch((error: unknown) => {
-      if (
-        error instanceof Error
-        && 'code' in error
-        && error.code === 'ENOENT'
-      ) {
+      if (hasCode(
+        error,
+        'ENOENT',
+      )) {
         return undefined;
       }
 
@@ -39,11 +60,10 @@ process.exitCode = await runProgram(
     ).then(
       () => true,
       (error: unknown) => {
-        if (
-          error instanceof Error
-          && 'code' in error
-          && error.code === 'EEXIST'
-        ) {
+        if (hasCode(
+          error,
+          'EEXIST',
+        )) {
           return false;
         }
 
@@ -70,5 +90,17 @@ process.exitCode = await runProgram(
         repoHost: new GitHubRepoHost(client),
       };
     },
+    connectAgents: (
+      config,
+      token,
+    ) => ({
+      workspaces: new GitWorkspaces({
+        directory: cacheDirectory(),
+        remoteUrl: (repository) => `https://github.com/${repository}.git`,
+        token,
+        author: config.git.author,
+      }),
+      agent: new ClaudeAgentProvider(),
+    }),
   },
 );

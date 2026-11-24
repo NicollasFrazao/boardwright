@@ -4,10 +4,13 @@ import { RepositoryContextProvider } from '@boardwright/context';
 import {
   diagnose,
   tick,
+  type AgentProvider,
   type BoardPort,
+  type Logger,
   type PipelineConfig,
   type RepoHostPort,
   type TickDependencies,
+  type WorkspacePort,
 } from '@boardwright/core';
 import {
   ConfigFileError,
@@ -17,18 +20,18 @@ import {
 } from './config-file.ts';
 import {
   formatDoctor,
-  formatPlan,
+  formatTick,
 } from './format.ts';
 import { repositoryFiles } from './repository-files.ts';
 
-/** Exit codes: success, checks that failed, and a command that could not run. */
+/** Exit codes: success, checks or runs that failed, and a command that could not run. */
 export const EXIT = {
   ok: 0,
   failed: 1,
   usage: 2,
 } as const;
 
-/** The outside world of the program: files, output and the GitHub adapters. */
+/** The outside world of the program: files, output and the adapters. */
 export interface ProgramEnvironment {
   readonly variables: Readonly<Record<string, string | undefined>>;
   readFile(path: string): Promise<string | undefined>;
@@ -37,13 +40,22 @@ export interface ProgramEnvironment {
   createFile(path: string, text: string): Promise<boolean>;
   stdout(text: string): void;
   stderr(text: string): void;
+
+  /** The adapters that read and write the board and the repositories. */
   connect(config: PipelineConfig, token: string): GitHubAdapters;
+
+  /** The adapters that act: the workspaces and the agent. Only `once` without `--dry-run` asks for them. */
+  connectAgents(config: PipelineConfig, token: string): AgentAdapters;
 }
 
-/** The adapters the commands read the board and the repositories through. */
 interface GitHubAdapters {
   readonly board: BoardPort;
   readonly repoHost: RepoHostPort;
+}
+
+interface AgentAdapters {
+  readonly workspaces: WorkspacePort;
+  readonly agent: AgentProvider;
 }
 
 const TOKEN_VARIABLES = [
@@ -57,6 +69,7 @@ export const USAGE = `Usage: boardwright <command> [options]
 
 Commands:
   doctor            Check the config against the board and the repositories. Changes nothing.
+  once              Run one tick: claim the items that are due, run their stage, record the outcome.
   once --dry-run    Print what one tick would do. Changes nothing.
   init              Write a starter ${DEFAULT_CONFIG_PATH}: --owner <login> --project <number> --repository <owner/name>...
 
@@ -66,7 +79,9 @@ Options:
   --help            Show this help
 
 The GitHub token is read from BOARDWRIGHT_GITHUB_TOKEN, GITHUB_TOKEN or GH_TOKEN. It needs read access to the
-repositories and the board (a classic token needs the project scope for a user's project).`;
+board (a classic token needs the project scope for a user's project) and, for once, write access to the
+repositories' contents, issues and pull requests. The agent authenticates through the Claude Agent SDK's
+documented methods, such as ANTHROPIC_API_KEY; boardwright never handles those credentials.`;
 
 class UsageError extends Error {}
 
@@ -149,13 +164,12 @@ async function dispatch(
         options,
       );
     case 'once':
-      if (values['dry-run'] !== true) {
-        throw new UsageError('once runs agents only with the workspace and agent adapters, which are not released yet; use once --dry-run.');
-      }
-
-      return dryRun(
+      return once(
         environment,
-        options,
+        {
+          ...options,
+          isDryRun: values['dry-run'] === true,
+        },
       );
     case 'init':
       return init(
@@ -206,39 +220,50 @@ async function doctor(
   return report.hasFailures ? EXIT.failed : EXIT.ok;
 }
 
-async function dryRun(
+async function once(
   environment: ProgramEnvironment,
-  options: CommonOptions,
+  options: CommonOptions & { readonly isDryRun: boolean },
 ): Promise<number> {
   const config = await loadConfig(
     environment,
     options.configPath,
   );
 
-  const {
-    board,
-    repoHost,
-  } = environment.connect(
+  const token = tokenFrom(environment);
+
+  const github = environment.connect(
     config,
-    tokenFrom(environment),
+    token,
+  );
+
+  const acting = options.isDryRun ? dryRunAdapters() : environment.connectAgents(
+    config,
+    token,
   );
 
   const report = await tick(
-    dryRunDependencies(
-      config,
-      board,
-      repoHost,
-    ),
-    { dryRun: true },
+{
+  config,
+  ...github,
+  ...acting,
+  context: new RepositoryContextProvider(),
+  clock: { now: () => new Date() },
+  runIds: { next: () => randomUUID() },
+  logger: options.isDryRun ? silentLogger() : jsonLogger(environment),
+} satisfies TickDependencies,
+{ dryRun: options.isDryRun },
   );
 
   environment.stdout(options.json ? JSON.stringify(
     report,
     null,
     2,
-  ) : formatPlan(report));
+  ) : formatTick(
+    report,
+    options.isDryRun,
+  ));
 
-  return EXIT.ok;
+  return report.entries.some((entry) => entry.result?.kind === 'error') ? EXIT.failed : EXIT.ok;
 }
 
 async function init(
@@ -317,34 +342,66 @@ function tokenFrom(environment: ProgramEnvironment): string {
 }
 
 /**
- * Tick dependencies for a dry run: a dry run only plans, so the ports that act are never called.
+ * The acting adapters of a dry run: a dry run only plans, so they are never called.
  *
- * @throws {@link Error} from those ports if a change ever made a dry run reach them.
+ * @throws {@link Error} from those adapters if a change ever made a dry run reach them.
  */
-function dryRunDependencies(
-  config: PipelineConfig,
-  board: BoardPort,
-  repoHost: RepoHostPort,
-): TickDependencies {
+function dryRunAdapters(): AgentAdapters {
   const unavailable = (): Promise<never> => Promise.reject(new Error('A dry run never acts.'));
 
   return {
-    config,
-    board,
-    repoHost,
     workspaces: {
       prepare: unavailable,
       changedPaths: unavailable,
+      hasCommits: unavailable,
       push: unavailable,
       dispose: unavailable,
     },
     agent: { run: unavailable },
-    context: { load: unavailable },
-    clock: { now: () => new Date() },
-    runIds: { next: () => randomUUID() },
-    logger: {
-      info: () => undefined,
-      warn: () => undefined,
+  };
+}
+
+function silentLogger(): Logger {
+  return {
+    info: () => undefined,
+    warn: () => undefined,
+  };
+}
+
+/** One JSON object per line on stderr, so the report on stdout stays readable. */
+function jsonLogger(environment: ProgramEnvironment): Logger {
+  const write = (
+    level: string,
+    event: string,
+    fields?: Readonly<Record<string, unknown>>,
+  ): void => {
+    environment.stderr(JSON.stringify({
+      level,
+      event,
+      ...fields,
+    }));
+  };
+
+  return {
+    info: (
+      event,
+      fields,
+    ) => {
+      write(
+        'info',
+        event,
+        fields,
+      );
+    },
+    warn: (
+      event,
+      fields,
+    ) => {
+      write(
+        'warn',
+        event,
+        fields,
+      );
     },
   };
 }

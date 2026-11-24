@@ -9,8 +9,10 @@
     "boardwright": "./src/cli.ts"
   },
   "dependencies": {
+    "@boardwright/agent-claude": "0.0.0",
     "@boardwright/context": "0.0.0",
     "@boardwright/core": "0.0.0",
+    "@boardwright/git": "0.0.0",
     "@boardwright/github": "0.0.0",
     "yaml": "2.9.1"
   }
