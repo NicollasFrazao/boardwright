@@ -242,16 +242,16 @@ async function once(
   );
 
   const report = await tick(
-{
-  config,
-  ...github,
-  ...acting,
-  context: new RepositoryContextProvider(),
-  clock: { now: () => new Date() },
-  runIds: { next: () => randomUUID() },
-  logger: options.isDryRun ? silentLogger() : jsonLogger(environment),
-} satisfies TickDependencies,
-{ dryRun: options.isDryRun },
+    {
+      config,
+      ...github,
+      ...acting,
+      context: new RepositoryContextProvider(),
+      clock: { now: () => new Date() },
+      runIds: { next: () => randomUUID() },
+      logger: options.isDryRun ? silentLogger() : jsonLogger(environment),
+    } satisfies TickDependencies,
+    { dryRun: options.isDryRun },
   );
 
   environment.stdout(options.json ? JSON.stringify(
