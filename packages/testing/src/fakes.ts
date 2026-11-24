@@ -285,11 +285,19 @@ export class FakeRepoHost implements RepoHostPort {
 export class FakeWorkspaces implements WorkspacePort {
   changed: string[] = ['src/feature.ts'];
 
+  /** Whether the branch has commits; a test clears it to play an agent that forgot to commit. */
+  committed = true;
+
   readonly prepared: Workspace[] = [];
 
   readonly pushed: Workspace[] = [];
 
   readonly disposed: Workspace[] = [];
+
+  /** The value the test set in `committed`. */
+  hasCommits(): Promise<boolean> {
+    return Promise.resolve(this.committed);
+  }
 
   /** Records a worktree under a fixed path. */
   prepare(request: WorkspaceRequest): Promise<Workspace> {

@@ -33,7 +33,12 @@ export GITHUB_TOKEN=$(gh auth token)   # a token that can read your board (proje
 npm run boardwright -- init --owner <login> --project <number> --repository <owner/name>
 npm run boardwright -- doctor          # checks the config against the board; changes nothing
 npm run boardwright -- once --dry-run  # prints what one tick would do; changes nothing
+npm run boardwright -- once            # runs the due stages: needs ANTHROPIC_API_KEY (or another documented method)
 ```
+
+The agent authenticates only through the [Claude Agent SDK's documented methods](https://code.claude.com/docs/en/agent-sdk/quickstart):
+an API key, Amazon Bedrock, Claude Platform on AWS, Google Cloud or Microsoft Foundry. boardwright never
+offers or handles a claude.ai login.
 
 ## Safety model
 

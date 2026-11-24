@@ -38,9 +38,26 @@ the people who could have made the change themselves.
 - **Repository token:** fine-grained, contents/pull requests/issues read-write on the allowlisted
   repositories; pull requests opened with the default token do not trigger CI.
 - **Merge token (opt-in):** separate from the token that opened the pull request.
-- **Agent credentials:** never stored or managed by boardwright. The runner uses the login already on
-  the machine or `ANTHROPIC_API_KEY`; the Action uses a repository secret. See
-  [ADR 0002](./adr/0002-local-runner-and-action.md).
+- **Agent credentials:** only the Agent SDK's documented methods (`ANTHROPIC_API_KEY`, Bedrock, Claude
+  Platform on AWS, Google Cloud, Foundry), never a claude.ai login, and never stored or managed by
+  boardwright. See [ADR 0004](./adr/0004-agent-credentials-through-documented-methods.md).
+
+## What an agent session can do
+
+The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts every session with:
+
+- `permissionMode: 'dontAsk'` and a closed list of tools (`Read`, `Edit`, `Write`, `Glob`, `Grep`, `Bash`,
+  `TodoWrite`, plus dotcontext's read tools when the repository has a `.context` base); everything else is
+  denied, and `WebFetch`, `WebSearch` and dotcontext's `sync` are denied even if the repository's settings
+  allow them;
+- a `PreToolUse` hook that denies writes to a denied path or outside the worktree, and shell commands that
+  push or call `gh`;
+- the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
+- only the project's settings (`settingSources: ['project']`), not the machine user's.
+
+The git workspaces give the token to the runner's own `clone`, `fetch` and `push` through the commands'
+`GIT_CONFIG_*` environment; it is never written to `.git/config`, so the agent cannot read it, and its own
+`git push` has no credentials. The core still checks the diff against the denylist before pushing.
 
 ## Secrets & Sensitive Data
 

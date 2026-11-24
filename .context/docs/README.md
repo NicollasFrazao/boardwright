@@ -68,7 +68,8 @@ develops others:
 - `packages/github/` — the GitHub adapters: the Projects v2 board and the repository host
 - `packages/runner/` — the CLI: `doctor`, `once --dry-run`, `init`
 - `packages/testing/` — fakes of every port and the GitHub API replay, for tests only
-- `packages/agent-claude/` — the Claude provider, in #5
+- `packages/git/` — the git workspaces: a cached clone per repository, a worktree per run
+- `packages/agent-claude/` — the Claude provider on the Claude Agent SDK
 - `eslint-rules/` — local readability rules, with RuleTester tests
 - `scripts/` — `check-context-surfaces.mjs` (export and check of the agent surfaces)
 - `.context/` — this knowledge base

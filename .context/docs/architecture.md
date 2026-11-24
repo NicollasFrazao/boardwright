@@ -36,7 +36,8 @@ laptop and in GitHub Actions.
 | `packages/core` (`src/application`) | Application | Config schema (zod), ports, `tick()` | #3 |
 | `packages/context` | Infrastructure | `ContextProvider`: the repository's dotcontext base, or `AGENTS.md`/`CLAUDE.md` | #3 |
 | `packages/github` | Infrastructure | `BoardPort` on a Projects v2 board of a user or an organization (GraphQL); `RepoHostPort` on the REST API: issues, comments, the labeller from the issue's events, pull requests, labels, files | #4 |
-| `packages/agent-claude` | Infrastructure | `AgentProvider` on the Claude Agent SDK | #5 |
+| `packages/git` | Infrastructure | `WorkspacePort` on the git CLI: a cached clone per repository, a worktree per run, push without force | #5 |
+| `packages/agent-claude` | Infrastructure | `AgentProvider` on the Claude Agent SDK: a closed tool list, a `PreToolUse` guard, a token-free environment, a structured report | #5 |
 | `packages/runner` | Interface | CLI: `doctor`, `once --dry-run`, `init` (#4); `once` with agents (#5) and the daemon `run` (#8) | #4, #5, #8 |
 | `packages/testing` | (tests only) | Fakes of every port and a replay of the GitHub API; no `src` may import it | #4 |
 | `action/` | Interface | GitHub Action: one `tick()` per event | #8 |
@@ -48,7 +49,7 @@ Checked by dependency-cruiser (`npm run check:architecture`, `.dependency-cruise
 - `core/src/domain` imports only Node built-ins.
 - `core/src/application` imports only the domain and zod.
 - `core` imports no other package.
-- An adapter (`context`, `github`, `agent-*`) imports only the core, never another adapter.
+- An adapter (`context`, `git`, `github`, `agent-*`) imports only the core, never another adapter.
 - Outside the core, only its public API (`packages/core/src/index.ts`) is imported.
 - Nothing imports `runner` or `action`: they are composition roots.
 - Source never imports tests; published code never needs a devDependency at run time.

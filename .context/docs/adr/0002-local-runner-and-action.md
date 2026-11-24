@@ -1,6 +1,6 @@
 # 0002. One core, two runtimes; credentials are never stored
 
-- Status: accepted
+- Status: accepted; the credentials part is amended by [0004](./0004-agent-credentials-through-documented-methods.md)
 - Date: 2026-11-23
 
 ## Context

@@ -1,0 +1,14 @@
+{
+  "name": "@boardwright/git",
+  "version": "0.0.0",
+  "description": "The git workspaces of boardwright: a cached clone per repository and a worktree per run.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@boardwright/core": "0.0.0"
+  }
+}

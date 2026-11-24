@@ -67,6 +67,10 @@ function environment(
     },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
+    connectAgents: () => ({
+      workspaces: world.workspaces,
+      agent: world.agent,
+    }),
     connect: (
       _config,
       token,
@@ -303,15 +307,37 @@ describe('boardwright once --dry-run', () => {
     expect(env.out.at(-1)).toBe('Nothing to do: no item is in a Status a stage starts from.\n\nDry run: nothing was written.');
   });
 
-  it('refuses to act without --dry-run until the agent adapters exist', async () => {
-    const env = environment();
+  it('runs the stage without --dry-run, logs JSON to stderr and prints the outcome', async () => {
+    const world = scenario();
+    const env = environment(world);
 
     expect(await runProgram(
       ['once'],
       env,
-    )).toBe(EXIT.usage);
+    )).toBe(EXIT.ok);
 
-    expect(env.err[0]).toContain('use once --dry-run');
+    expect(env.out.join('\n')).toBe('implement  acme/app#7  run attempt 1 → succeeded: Opened https://github.com/acme/app/pull/100.\n\nDone.');
+    expect(world.board.statusOf('item-7')).toBe('In review');
+
+    expect(JSON.parse(env.err[0] ?? '{}')).toMatchObject({
+      level: 'info',
+      event: 'tick.item',
+    });
+  });
+
+  it('exits 1 when an item errors', async () => {
+    const world = scenario();
+
+    world.repoHost.addComment = () => Promise.reject(new Error('GitHub is down'));
+
+    const env = environment(world);
+
+    expect(await runProgram(
+      ['once'],
+      env,
+    )).toBe(EXIT.failed);
+
+    expect(env.err.some((line) => line.includes('"level":"warn"'))).toBe(true);
   });
 });
 
