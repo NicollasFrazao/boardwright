@@ -8,6 +8,7 @@ import type {
   Clock,
   ContextProvider,
   ContextSelector,
+  Feedback,
   Issue,
   IssueComment,
   IssueRef,
@@ -130,6 +131,12 @@ export class FakeRepoHost implements RepoHostPort {
 
   readonly drafts: PullRequestDraft[] = [];
 
+  /** Feedback per pull request number; none means nothing to address. */
+  readonly feedback = new Map<number, Feedback>();
+
+  /** Review threads the pipeline resolved, in order. */
+  readonly resolvedThreads: string[] = [];
+
   /** Reviews posted, in order. */
   readonly reviews: ReviewDraft[] = [];
 
@@ -151,6 +158,37 @@ export class FakeRepoHost implements RepoHostPort {
 
   constructor(clock: FakeClock) {
     this.clock = clock;
+  }
+
+  /** The feedback the test set for the pull request. */
+  getFeedback(
+    _repository: string,
+    number: number,
+  ): Promise<Feedback> {
+    return Promise.resolve(this.feedback.get(number) ?? {
+      threads: [],
+      failingChecks: [],
+    });
+  }
+
+  /** Records the thread and takes it out of the stored feedback. */
+  resolveThread(threadId: string): Promise<void> {
+    this.resolvedThreads.push(threadId);
+
+    for (const [
+      number,
+      feedback,
+    ] of this.feedback) {
+      this.feedback.set(
+        number,
+        {
+          ...feedback,
+          threads: feedback.threads.filter((thread) => thread.id !== threadId),
+        },
+      );
+    }
+
+    return Promise.resolve();
   }
 
   /** Whether a review was posted for this head commit. */
@@ -329,6 +367,7 @@ export class FakeWorkspaces implements WorkspacePort {
     const workspace = {
       ...request,
       path: `/work/worktrees/${request.branch}`,
+      startSha: 'start00',
     };
 
     this.prepared.push(workspace);
@@ -366,6 +405,7 @@ export class FakeAgent implements AgentProvider {
       body: 'Adds the feature.',
     },
     review: undefined,
+    addressedThreadIds: [],
   };
 
   error: Error | undefined;

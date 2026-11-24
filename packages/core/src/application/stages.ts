@@ -14,10 +14,14 @@ import type {
   Issue,
   PullRequest,
 } from './ports.ts';
+import {
+  hasFeedback,
+  runFeedbackStage,
+} from './feedback-stage.ts';
 import { runReviewStage } from './review-stage.ts';
 
 /** Why a stage does not apply to an item right now. */
-export type StagePrecondition = 'no-pull-request';
+export type StagePrecondition = 'no-pull-request' | 'no-feedback';
 
 /**
  * What the loop needs to know about one stage: when it applies, when its work is already in place, how
@@ -99,6 +103,33 @@ export function handlerFor(
           );
         },
         run: (issue) => runReviewStage(
+          dependencies,
+          {
+            ...run,
+            issue,
+          },
+        ),
+        statusAfter: () => undefined,
+      };
+    case 'address-feedback':
+      return {
+        claimStatus: undefined,
+        repairStatus: undefined,
+        giveUpStatus: undefined,
+        precondition: async (issue) => {
+          const pullRequest = await openPullRequest(issue);
+
+          if (pullRequest === undefined) {
+            return 'no-pull-request';
+          }
+
+          return hasFeedback(await dependencies.repoHost.getFeedback(
+            issue.ref.repository,
+            pullRequest.number,
+          )) ? undefined : 'no-feedback';
+        },
+        isResultInPlace: () => Promise.resolve(false),
+        run: (issue) => runFeedbackStage(
           dependencies,
           {
             ...run,

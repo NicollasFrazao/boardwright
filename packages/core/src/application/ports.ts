@@ -63,6 +63,24 @@ export interface ReviewComment {
   readonly body: string;
 }
 
+/** An unresolved review thread, with its latest comment. */
+export interface ReviewThread {
+  readonly id: string;
+  readonly path: string;
+
+  /** `null` when the thread is on a line the latest push no longer has. */
+  readonly line: number | null;
+  readonly body: string;
+}
+
+/** What a pull request asks of its author right now. */
+export interface Feedback {
+  readonly threads: readonly ReviewThread[];
+
+  /** Names of the checks of the head commit that failed; checks still running are not listed. */
+  readonly failingChecks: readonly string[];
+}
+
 /** What the review stage posts on a pull request: a review that comments, never one that approves. */
 export interface ReviewDraft {
   readonly repository: string;
@@ -106,6 +124,12 @@ export interface RepoHostPort {
   /** The names in a directory on the default branch; empty when it does not exist. */
   listDirectory(repository: string, path: string): Promise<string[]>;
 
+  /** The unresolved review threads and the failing checks of the head commit of a pull request. */
+  getFeedback(repository: string, number: number): Promise<Feedback>;
+
+  /** Marks a review thread resolved; only the pipeline does this, for threads the agent addressed. */
+  resolveThread(threadId: string): Promise<void>;
+
   /** Whether the pipeline already reviewed the pull request at this head commit. */
   hasAgentReview(repository: string, number: number, headSha: string): Promise<boolean>;
 
@@ -119,6 +143,9 @@ export interface Workspace {
   readonly path: string;
   readonly branch: string;
   readonly base: string;
+
+  /** The commit the worktree started at; the run's own commits are the ones after it. */
+  readonly startSha: string;
 }
 
 /** What a run needs checked out. */
@@ -136,7 +163,7 @@ export interface WorkspacePort {
   /** Paths changed on the branch relative to `base`, committed or not, using `/` separators. */
   changedPaths(workspace: Workspace): Promise<string[]>;
 
-  /** Whether the branch has commits that `base` does not. */
+  /** Whether the run committed anything: commits after `startSha`. */
   hasCommits(workspace: Workspace): Promise<boolean>;
 
   /** Pushes the branch without force. */
@@ -174,6 +201,9 @@ export interface AgentResult {
     readonly verdict: 'approve' | 'changes';
     readonly comments: readonly ReviewComment[];
   } | undefined;
+
+  /** For a `change` task on feedback: the ids of the review threads the agent says it addressed. */
+  readonly addressedThreadIds: readonly string[];
 }
 
 /** An agent runtime (Claude first). */
