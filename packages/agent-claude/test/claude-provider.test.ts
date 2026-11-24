@@ -22,6 +22,7 @@ import {
   ClaudeAgentProvider,
   guardTools,
   REPORT_SCHEMA,
+  REVIEW_REPORT_SCHEMA,
   type QueryFunction,
 } from '../src/index.ts';
 
@@ -47,6 +48,7 @@ afterEach(async () => {
 function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
   return {
     stage: 'implement',
+    task: 'change',
     cwd,
     prompt: 'Implement issue #7.',
     maxTurns: 80,
@@ -415,5 +417,89 @@ describe('guardTools', () => {
       undefined,
       { signal },
     )).toEqual({});
+  });
+});
+
+describe('ClaudeAgentProvider: review tasks', () => {
+  it('reads only: no write tools, the review schema', async () => {
+    const fake = replying([]);
+
+    await new ClaudeAgentProvider({
+      query: fake.query,
+      environment: {},
+    }).run(request({ task: 'review' }));
+
+    const options = fake.calls[0]?.options;
+
+    expect(options?.allowedTools).toEqual([
+      'Read',
+      'Glob',
+      'Grep',
+      'Bash',
+    ]);
+
+    expect(options?.disallowedTools).toEqual(expect.arrayContaining([
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'NotebookEdit',
+    ]));
+
+    expect(options?.outputFormat).toEqual({
+      type: 'json_schema',
+      schema: REVIEW_REPORT_SCHEMA,
+    });
+  });
+
+  async function review(output: unknown): ReturnType<ClaudeAgentProvider['run']> {
+    return new ClaudeAgentProvider({
+      query: replying([result({ structured_output: output })]).query,
+      environment: {},
+    }).run(request({ task: 'review' }));
+  }
+
+  it('returns the verdict and the line comments', async () => {
+    expect(await review({
+      status: 'completed',
+      summary: 'One finding.',
+      verdict: 'changes',
+      comments: [
+        {
+          path: 'src/a.ts',
+          line: 3,
+          body: 'Name it.',
+        },
+      ],
+    })).toEqual({
+      status: 'completed',
+      summary: 'One finding.',
+      pullRequest: undefined,
+      review: {
+        verdict: 'changes',
+        comments: [
+          {
+            path: 'src/a.ts',
+            line: 3,
+            body: 'Name it.',
+          },
+        ],
+      },
+    });
+  });
+
+  it('carries no verdict when the reviewer is blocked, and fails on a malformed review', async () => {
+    expect((await review({
+      status: 'blocked',
+      summary: 'Empty diff.',
+      verdict: 'approve',
+      comments: [],
+    })).review).toBeUndefined();
+
+    expect((await review({
+      status: 'completed',
+      summary: 'x',
+      verdict: 'maybe',
+      comments: [],
+    })).status).toBe('failed');
   });
 });

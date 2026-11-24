@@ -196,12 +196,14 @@ async function checkContext(
 }
 
 function requiredStatuses(stages: readonly StageConfig[]): string[] {
-  const statuses = stages.flatMap((stage) => [
-    stage.when.status,
-    stage.claim.status,
-    stage.done.status,
-    stage.blocked.status,
-  ]);
+  const statuses = stages.flatMap((stage) => stage.id === 'implement'
+    ? [
+        stage.when.status,
+        stage.claim.status,
+        stage.done.status,
+        stage.blocked.status,
+      ]
+    : [stage.when.status]);
 
   return [...new Set(statuses)];
 }

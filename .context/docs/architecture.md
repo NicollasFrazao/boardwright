@@ -99,10 +99,15 @@ comment lets it try again.
 | --- | --- | --- | --- |
 | refine (optional) | a column the board owner adds | P | Plan as an issue comment or a `.context/plans` file |
 | implement | Ready | E | Branch `agent/issue-N`, change, local gate, pull request with `Closes #N` |
-| review | In review | R | Comments and a verdict in the run marker; never approves |
+| review | In review | R | Reviews the head of `agent/issue-N`'s pull request read-only; posts a review that only comments, with line comments and a `<!-- boardwright:review v=1 verdict=… head=… -->` marker; never approves, never moves the card. A new push starts a new round; `maxAttempts` caps the rounds |
 | address-feedback | In review | E/V | Fixes for unresolved threads and failing checks, up to `maxAttempts` |
 | merge (opt-in) | In review | V | Native auto-merge when the merge policy passes |
 | document (opt-in) | Done | C | Pull request updating the `.context` docs the change touched |
+
+Each stage has a handler (`packages/core/src/application/stages.ts`) that says when it applies (review
+needs an open pull request from the branch), what "its result is in place" means (implement: the pull
+request is open; review: a review of the current head exists), and where the card goes after a run or
+when the pipeline gives up (review leaves it where it is).
 
 The playbook and the skills for each stage come from the target repository's `.context` through the
 `ContextProvider` port (`packages/context`): with a `.context/agents` or `.context/skills` directory,

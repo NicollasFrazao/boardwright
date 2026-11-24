@@ -53,7 +53,10 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
 - a `PreToolUse` hook that denies writes to a denied path or outside the worktree, and shell commands that
   push or call `gh`;
 - the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
-- only the project's settings (`settingSources: ['project']`), not the machine user's.
+- only the project's settings (`settingSources: ['project']`), not the machine user's;
+- for a review, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
+  `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments; it
+  never approves.
 
 The git workspaces give the token to the runner's own `clone`, `fetch` and `push` through the commands'
 `GIT_CONFIG_*` environment; it is never written to `.git/config`, so the agent cannot read it, and its own

@@ -88,6 +88,41 @@ const agentReport = z.object({
 /** The structured output every session must end with. */
 export const REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(agentReport);
 
+const reviewReport = z.object({
+  status: z.enum([
+    'completed',
+    'blocked',
+  ]),
+  summary: z.string(),
+  verdict: z.enum([
+    'approve',
+    'changes',
+  ]),
+  comments: z.array(z.object({
+    path: z.string().min(1),
+    line: z.int().positive(),
+    body: z.string().min(1),
+  })),
+});
+
+/** The structured output a review session must end with. */
+export const REVIEW_REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(reviewReport);
+
+/** The tools a reviewing agent may use: it reads and runs checks, it never edits. */
+export const REVIEW_TOOLS: readonly string[] = [
+  'Read',
+  'Glob',
+  'Grep',
+  'Bash',
+];
+
+const WRITE_TOOLS: readonly string[] = [
+  'Edit',
+  'Write',
+  'MultiEdit',
+  'NotebookEdit',
+];
+
 /** Environment variables, some unset. */
 type Environment = Record<string, string | undefined>;
 
@@ -148,7 +183,10 @@ export class ClaudeAgentProvider implements AgentProvider {
         }
       }
 
-      return abort.signal.aborted ? timedOut(request) : toAgentResult(result);
+      return abort.signal.aborted ? timedOut(request) : toAgentResult(
+        result,
+        request.task,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -163,6 +201,8 @@ export class ClaudeAgentProvider implements AgentProvider {
     request: AgentRequest,
     abort: AbortController,
   ): Options {
+    const isReview = request.task === 'review';
+
     const hasContextBase = existsSync(join(
       request.cwd,
       '.context',
@@ -187,10 +227,13 @@ export class ClaudeAgentProvider implements AgentProvider {
       maxTurns: request.maxTurns,
       permissionMode: 'dontAsk',
       allowedTools: [
-        ...STAGE_TOOLS,
+        ...isReview ? REVIEW_TOOLS : STAGE_TOOLS,
         ...hasContextBase ? DOTCONTEXT_TOOLS : [],
       ],
-      disallowedTools: [...DENIED_TOOLS],
+      disallowedTools: [
+        ...DENIED_TOOLS,
+        ...isReview ? WRITE_TOOLS : [],
+      ],
       settingSources: ['project'],
       systemPrompt: {
         type: 'preset',
@@ -199,7 +242,7 @@ export class ClaudeAgentProvider implements AgentProvider {
       },
       outputFormat: {
         type: 'json_schema',
-        schema: REPORT_SCHEMA,
+        schema: isReview ? REVIEW_REPORT_SCHEMA : REPORT_SCHEMA,
       },
       hooks: {
         PreToolUse: [{
@@ -324,13 +367,20 @@ export function withoutTokens(environment: Readonly<Environment>): Environment {
   return copy;
 }
 
-function toAgentResult(result: SDKResultMessage | undefined): AgentResult {
+function toAgentResult(
+  result: SDKResultMessage | undefined,
+  task: AgentRequest['task'],
+): AgentResult {
   if (result === undefined) {
     return failed('The agent session ended without a result.');
   }
 
   if (result.subtype !== 'success') {
     return failed(`The agent session stopped: ${result.subtype}.`);
+  }
+
+  if (task === 'review') {
+    return toReviewResult(result.structured_output);
   }
 
   const report = agentReport.safeParse(result.structured_output);
@@ -353,6 +403,27 @@ function toAgentResult(result: SDKResultMessage | undefined): AgentResult {
       title: pullRequestTitle,
       body: pullRequestBody ?? '',
     },
+    review: undefined,
+  };
+}
+
+function toReviewResult(output: unknown): AgentResult {
+  const report = reviewReport.safeParse(output);
+
+  if (!report.success) {
+    return failed('The agent finished without reporting its review in the expected form.');
+  }
+
+  return {
+    status: report.data.status,
+    summary: report.data.summary,
+    pullRequest: undefined,
+    review: report.data.status === 'completed'
+      ? {
+          verdict: report.data.verdict,
+          comments: report.data.comments,
+        }
+      : undefined,
   };
 }
 
@@ -365,5 +436,6 @@ function failed(summary: string): AgentResult {
     status: 'failed',
     summary,
     pullRequest: undefined,
+    review: undefined,
   };
 }

@@ -21,7 +21,7 @@ issue labelled `agent` (by someone with triage)
             └─ worktree agent/issue-N → AgentProvider session (playbook + skills of phase E)
                  └─ local gate → diff checked against the path denylist → push → pull request "Closes #N"
                       └─ board: In review (built-in "pull request linked" workflow)
-                           ├─ tick: review → comments + verdict in the marker
+                           ├─ tick: review → a review that only comments, verdict marked for the head commit
                            ├─ tick: address-feedback → fix commits (≤ maxAttempts)
                            └─ tick: merge (opt-in) → policy passes → native auto-merge
                                 └─ board: Done (built-in "item closed" workflow)

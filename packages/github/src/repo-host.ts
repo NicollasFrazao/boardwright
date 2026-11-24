@@ -7,9 +7,12 @@ import type {
   PullRequestDraft,
   RepoHostPort,
   RepositoryPermission,
+  ReviewDraft,
 } from '@boardwright/core';
+import { parseReviewMarker } from '@boardwright/core';
 import {
   isNotFound,
+  isUnprocessable,
   splitRepository,
   type GitHubClient,
 } from './client.ts';
@@ -148,6 +151,7 @@ export class GitHubRepoHost implements RepoHostPort {
     return pullRequest === undefined ? undefined : {
       number: pullRequest.number,
       url: pullRequest.html_url,
+      headSha: pullRequest.head.sha,
     };
   }
 
@@ -164,7 +168,74 @@ export class GitHubRepoHost implements RepoHostPort {
     return {
       number: data.number,
       url: data.html_url,
+      headSha: data.head.sha,
     };
+  }
+
+  /** Whether a review carrying the pipeline's marker was posted for this head commit. */
+  async hasAgentReview(
+    repository: string,
+    number: number,
+    headSha: string,
+  ): Promise<boolean> {
+    const reviews = await this.client.paginate(
+      this.client.rest.pulls.listReviews,
+      {
+        ...splitRepository(repository),
+        pull_number: number,
+        per_page: 100,
+      },
+    );
+
+    return reviews.some((review) => review.commit_id === headSha
+      && parseReviewMarker(review.body)?.headSha === headSha);
+  }
+
+  /**
+   * Posts a review that only comments, with its line comments.
+   *
+   * @remarks
+   * GitHub rejects the whole review (422) when one comment points at a line outside the diff; the review is
+   * then posted again with the comments in its body, so no finding is lost.
+   */
+  async submitReview(review: ReviewDraft): Promise<void> {
+    const target = {
+      ...splitRepository(review.repository),
+      pull_number: review.number,
+      commit_id: review.headSha,
+      event: 'COMMENT' as const,
+    };
+
+    try {
+      await this.client.rest.pulls.createReview({
+        ...target,
+        body: review.body,
+        comments: review.comments.map((comment) => ({
+          path: comment.path,
+          line: comment.line,
+          side: 'RIGHT' as const,
+          body: comment.body,
+        })),
+      });
+    } catch (error) {
+      if (
+        !isUnprocessable(error)
+        || review.comments.length === 0
+      ) {
+        throw error;
+      }
+
+      await this.client.rest.pulls.createReview({
+        ...target,
+        body: [
+          review.body,
+          '',
+          '**Line comments** (GitHub could not place them on the diff):',
+          '',
+          ...review.comments.map((comment) => `- \`${comment.path}:${comment.line}\` ${comment.body}`),
+        ].join('\n'),
+      });
+    }
   }
 
   /** Whether the repository has a label with this exact name. */

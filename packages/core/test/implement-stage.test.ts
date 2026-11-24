@@ -145,6 +145,7 @@ describe('runImplementStage', () => {
       status: 'blocked',
       summary: 'Which endpoint should the feature use?',
       pullRequest: undefined,
+      review: undefined,
     };
 
     const outcome = await runImplementStage(
@@ -169,6 +170,7 @@ describe('runImplementStage', () => {
       {
         number: 42,
         url: 'https://github.com/acme/app/pull/42',
+        headSha: 'def5678',
       },
     );
 
@@ -188,6 +190,7 @@ describe('runImplementStage', () => {
       status: 'completed',
       summary: 'Done.',
       pullRequest: undefined,
+      review: undefined,
     };
 
     await runImplementStage(
