@@ -17,6 +17,7 @@ import type {
   PullRequest,
   PullRequestDraft,
   RepoHostPort,
+  ReviewDraft,
   RunIdSource,
   StageContext,
   TickDependencies,
@@ -129,6 +130,9 @@ export class FakeRepoHost implements RepoHostPort {
 
   readonly drafts: PullRequestDraft[] = [];
 
+  /** Reviews posted, in order. */
+  readonly reviews: ReviewDraft[] = [];
+
   /** Repositories that answer every request with an error. */
   readonly unreachable = new Set<string>();
 
@@ -147,6 +151,26 @@ export class FakeRepoHost implements RepoHostPort {
 
   constructor(clock: FakeClock) {
     this.clock = clock;
+  }
+
+  /** Whether a review was posted for this head commit. */
+  hasAgentReview(
+    repository: string,
+    number: number,
+    headSha: string,
+  ): Promise<boolean> {
+    const matches = (review: ReviewDraft): boolean => review.repository === repository
+      && review.number === number
+      && review.headSha === headSha;
+
+    return Promise.resolve(this.reviews.some(matches));
+  }
+
+  /** Records the review. */
+  submitReview(review: ReviewDraft): Promise<void> {
+    this.reviews.push(review);
+
+    return Promise.resolve();
   }
 
   /** Whether the test added the label to the repository. */
@@ -268,6 +292,7 @@ export class FakeRepoHost implements RepoHostPort {
     const pullRequest = {
       number: 100 + this.drafts.length,
       url: `https://github.com/${draft.repository}/pull/${100 + this.drafts.length}`,
+      headSha: 'abc1234',
     };
 
     this.drafts.push(draft);
@@ -340,6 +365,7 @@ export class FakeAgent implements AgentProvider {
       title: 'feat(app): add the feature',
       body: 'Adds the feature.',
     },
+    review: undefined,
   };
 
   error: Error | undefined;

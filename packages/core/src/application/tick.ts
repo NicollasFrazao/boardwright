@@ -5,7 +5,6 @@ import {
 import {
   formatIssueRef,
   type IssueRef,
-  type RunOutcomeEvent,
 } from '../domain/pipeline.ts';
 import {
   decideRun,
@@ -22,11 +21,9 @@ import {
   type PipelineConfig,
   type StageConfig,
 } from './config.ts';
-import {
-  implementBranch,
-  runImplementStage,
-  type ImplementStageDependencies,
-  type StageOutcome,
+import type {
+  ImplementStageDependencies,
+  StageOutcome,
 } from './implement-stage.ts';
 import type {
   BoardItem,
@@ -36,6 +33,10 @@ import type {
   Logger,
   RunIdSource,
 } from './ports.ts';
+import {
+  handlerFor,
+  type StageHandler,
+} from './stages.ts';
 
 /** Everything one tick touches. */
 export interface TickDependencies extends ImplementStageDependencies {
@@ -52,7 +53,9 @@ export type SkipReason =
   | 'issue-closed'
   | 'not-triggered'
   | 'trigger-without-triage'
+  | 'no-pull-request'
   | 'in-flight'
+  | 'up-to-date'
   | 'gave-up'
   | 'plan-failed';
 
@@ -119,6 +122,11 @@ interface Plan {
   readonly issue: Issue | undefined;
 }
 
+interface StageInTick {
+  readonly config: StageConfig;
+  readonly handler: StageHandler;
+}
+
 /**
  * One pass of the reconciliation loop: for each stage, the items in its `when` Status are planned and,
  * unless it is a dry run, acted on.
@@ -135,10 +143,16 @@ export async function tick(
   const entries: TickEntry[] = [];
   const slots = { remaining: dependencies.config.concurrency };
 
-  for (const stage of dependencies.config.stages) {
-    const inStage = items.filter((item) => item.status === stage.when.status);
+  for (const config of dependencies.config.stages) {
+    const stage = {
+      config,
+      handler: handlerFor(
+        dependencies,
+        config,
+      ),
+    };
 
-    for (const item of inStage) {
+    for (const item of items.filter((candidate) => candidate.status === config.when.status)) {
       entries.push(await handleItem(
         dependencies,
         stage,
@@ -156,7 +170,7 @@ export async function tick(
 
 async function handleItem(
   dependencies: TickDependencies,
-  stage: StageConfig,
+  stage: StageInTick,
   item: BoardItem,
   state: {
     readonly dryRun: boolean;
@@ -185,7 +199,7 @@ async function handleItem(
   ));
 
   const entry: TickEntry = {
-    stage: stage.id,
+    stage: stage.config.id,
     itemId: item.itemId,
     issue: item.issue,
     action,
@@ -228,7 +242,7 @@ function takeSlot(
 
 async function planSafely(
   dependencies: TickDependencies,
-  stage: StageConfig,
+  stage: StageInTick,
   item: BoardItem,
 ): Promise<{
   readonly plan: Plan;
@@ -251,7 +265,7 @@ async function planSafely(
       ),
       error: reportError(
         dependencies,
-        stage,
+        stage.config,
         item,
         error,
       ),
@@ -261,7 +275,7 @@ async function planSafely(
 
 async function planItem(
   dependencies: TickDependencies,
-  stage: StageConfig,
+  stage: StageInTick,
   item: BoardItem,
 ): Promise<Plan> {
   const {
@@ -281,44 +295,39 @@ async function planItem(
 
   const issue = await repoHost.getIssue(item.issue);
 
-  const triggerProblem = await checkTrigger(
+  const problem = await checkTrigger(
     dependencies,
     issue,
-  );
+  ) ?? await stage.handler.precondition(issue);
 
-  if (triggerProblem !== undefined) {
+  if (problem !== undefined) {
     return skip(
-      triggerProblem,
+      problem,
       issue,
     );
   }
 
   const markers = readMarkers(
     await repoHost.listComments(item.issue),
-    stage.id,
-  );
-
-  const openPullRequest = await repoHost.findOpenPullRequest(
-    item.issue.repository,
-    implementBranch(item.issue.number),
+    stage.config.id,
   );
 
   const decision = decideRun(
     markers,
     {
       now: dependencies.clock.now(),
-      isResultInPlace: openPullRequest !== undefined,
+      isResultInPlace: await stage.handler.isResultInPlace(issue),
     },
     stageLimits(
       config,
-      stage,
+      stage.config,
     ),
   );
 
   return {
     action: actionFor(
       decision,
-      stage,
+      stage.handler,
     ),
     issue,
   };
@@ -352,7 +361,7 @@ async function checkTrigger(
 
 function actionFor(
   decision: RunDecision,
-  stage: StageConfig,
+  handler: StageHandler,
 ): PlannedAction {
   switch (decision.kind) {
     case 'start':
@@ -361,25 +370,30 @@ function actionFor(
         attempt: decision.attempt,
       };
     case 'in-flight':
-      return {
-        kind: 'skip',
-        reason: 'in-flight',
-      };
+      return skip(
+        'in-flight',
+        undefined,
+      ).action;
     case 'repair':
-      return {
-        kind: 'repair-status',
-        status: stage.done.status,
-      };
+      return handler.repairStatus === undefined
+        ? skip(
+          'up-to-date',
+          undefined,
+        ).action
+        : {
+            kind: 'repair-status',
+            status: handler.repairStatus,
+          };
     case 'give-up':
       return {
         kind: 'give-up',
         attempts: decision.attempts,
       };
     case 'given-up':
-      return {
-        kind: 'skip',
-        reason: 'gave-up',
-      };
+      return skip(
+        'gave-up',
+        undefined,
+      ).action;
   }
 }
 
@@ -398,7 +412,7 @@ function skip(
 
 async function executeSafely(
   dependencies: TickDependencies,
-  stage: StageConfig,
+  stage: StageInTick,
   item: BoardItem,
   plan: Plan,
 ): Promise<ExecutionResult | undefined> {
@@ -412,7 +426,7 @@ async function executeSafely(
   } catch (error) {
     return reportError(
       dependencies,
-      stage,
+      stage.config,
       item,
       error,
     );
@@ -444,7 +458,7 @@ function reportError(
 
 async function execute(
   dependencies: TickDependencies,
-  stage: StageConfig,
+  stage: StageInTick,
   item: BoardItem,
   plan: Plan,
 ): Promise<ExecutionResult | undefined> {
@@ -485,42 +499,46 @@ async function execute(
 
 async function giveUp(
   dependencies: TickDependencies,
-  stage: StageConfig,
+  stage: StageInTick,
   item: BoardItem,
   attempts: number,
 ): Promise<void> {
+  const stageId = stage.config.id;
+
   await dependencies.repoHost.addComment(
     item.issue,
     markerComment(
       {
-        stage: stage.id,
+        stage: stageId,
         runId: dependencies.runIds.next(),
         attempt: attempts,
         event: 'gave-up',
       },
-      `Gave up on the ${stage.id} stage after ${attempts} attempts; a person needs to look at this issue. To let the pipeline try again, delete this comment.`,
+      `Gave up on the ${stageId} stage after ${attempts} attempts; a person needs to look at this issue. To let the pipeline try again, delete this comment.`,
     ),
   );
 
-  await dependencies.board.setStatus(
-    item.itemId,
-    stage.blocked.status,
+  await moveTo(
+    dependencies,
+    item,
+    stage.handler.giveUpStatus,
   );
 }
 
 async function runStage(
   dependencies: TickDependencies,
-  stage: StageConfig,
+  stage: StageInTick,
   item: BoardItem,
   run: {
     readonly attempt: number;
     readonly issue: Issue | undefined;
   },
 ): Promise<ExecutionResult> {
+  const stageId = stage.config.id;
   const issue = run.issue ?? await dependencies.repoHost.getIssue(item.issue);
 
   const marker: RunMarker = {
-    stage: stage.id,
+    stage: stageId,
     runId: dependencies.runIds.next(),
     attempt: run.attempt,
     event: 'started',
@@ -530,13 +548,13 @@ async function runStage(
     item.issue,
     markerComment(
       marker,
-      `Started attempt ${run.attempt} of the ${stage.id} stage.`,
+      `Started attempt ${run.attempt} of the ${stageId} stage.`,
     ),
   );
 
   const markers = readMarkers(
     await dependencies.repoHost.listComments(item.issue),
-    stage.id,
+    stageId,
   );
 
   if (!isClaimWinner(
@@ -547,14 +565,14 @@ async function runStage(
     return { kind: 'lost-claim' };
   }
 
-  await dependencies.board.setStatus(
-    item.itemId,
-    stage.claim.status,
+  await moveTo(
+    dependencies,
+    item,
+    stage.handler.claimStatus,
   );
 
-  const outcome = await runImplementSafely(
-    dependencies,
-    stage,
+  const outcome = await runSafely(
+    stage.handler,
     issue,
   );
 
@@ -565,16 +583,14 @@ async function runStage(
         ...marker,
         event: outcome.event,
       },
-      `Attempt ${run.attempt} of the ${stage.id} stage ended: ${outcome.event}.\n\n${outcome.detail}`,
+      `Attempt ${run.attempt} of the ${stageId} stage ended: ${outcome.event}.\n\n${outcome.detail}`,
     ),
   );
 
-  await dependencies.board.setStatus(
-    item.itemId,
-    statusAfter(
-      stage,
-      outcome.event,
-    ),
+  await moveTo(
+    dependencies,
+    item,
+    stage.handler.statusAfter(outcome.event),
   );
 
   return {
@@ -583,28 +599,12 @@ async function runStage(
   };
 }
 
-async function runImplementSafely(
-  dependencies: TickDependencies,
-  stage: StageConfig,
+async function runSafely(
+  handler: StageHandler,
   issue: Issue,
 ): Promise<StageOutcome> {
-  const limits = stageLimits(
-    dependencies.config,
-    stage,
-  );
-
   try {
-    return await runImplementStage(
-      dependencies,
-      {
-        issue,
-        stage,
-        deniedPaths: dependencies.config.guardRails.deniedPaths,
-        maxTurns: limits.maxTurns,
-        timeoutMs: limits.timeoutMs,
-        model: dependencies.config.provider.model,
-      },
-    );
+    return await handler.run(issue);
   } catch (error) {
     return {
       event: 'failed',
@@ -614,19 +614,16 @@ async function runImplementSafely(
   }
 }
 
-/** Where an item goes after a run: forward on success, back to its stage on failure, to a person otherwise. */
-export function statusAfter(
-  stage: StageConfig,
-  event: RunOutcomeEvent,
-): string {
-  switch (event) {
-    case 'succeeded':
-      return stage.done.status;
-    case 'failed':
-      return stage.when.status;
-    case 'blocked':
-    case 'denied':
-      return stage.blocked.status;
+async function moveTo(
+  dependencies: TickDependencies,
+  item: BoardItem,
+  status: string | undefined,
+): Promise<void> {
+  if (status !== undefined) {
+    await dependencies.board.setStatus(
+      item.itemId,
+      status,
+    );
   }
 }
 

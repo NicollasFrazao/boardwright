@@ -92,6 +92,7 @@ async function implementIn(
 
   const result = await dependencies.agent.run({
     stage: run.stage.id,
+    task: 'change',
     cwd: workspace.path,
     prompt: buildImplementPrompt({
       issue: run.issue,

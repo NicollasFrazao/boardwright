@@ -302,6 +302,7 @@ describe('tick: idempotency and concurrency', () => {
       {
         number: 9,
         url: 'https://github.com/acme/app/pull/9',
+        headSha: 'def5678',
       },
     );
 

@@ -55,9 +55,26 @@ const implementStage = z.object({
   ...limitsOverride,
 }).strict();
 
+const reviewStage = z.object({
+  id: z.literal('review'),
+  when: z.object({ status: statusName }).prefault({ status: 'In review' }),
+  context: z.object({
+    phase: phase.default('R'),
+    agent: z.string().min(1).default('code-reviewer'),
+    agentByLabel: z.record(
+      z.string(),
+      z.string().min(1),
+    ).default({}),
+  }).prefault({}),
+  ...limitsOverride,
+}).strict();
+
 const stage = z.discriminatedUnion(
   'id',
-  [implementStage],
+  [
+    implementStage,
+    reviewStage,
+  ],
 );
 
 /** The schema of `pipeline.config.yml`, with every default the docs promise. */

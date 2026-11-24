@@ -49,10 +49,11 @@ export {
 export type * from './application/ports.ts';
 export {
   buildImplementPrompt,
+  buildReviewPrompt,
   type ImplementPromptInput,
+  type ReviewPromptInput,
 } from './application/prompt.ts';
 export {
-  statusAfter,
   tick,
   type ExecutionResult,
   type PlannedAction,
@@ -69,3 +70,18 @@ export {
   type DoctorDependencies,
   type DoctorReport,
 } from './application/doctor.ts';
+export {
+  formatReviewMarker,
+  parseReviewMarker,
+  type ReviewMarker,
+  type ReviewVerdict,
+} from './domain/review-marker.ts';
+export {
+  runReviewStage,
+  type ReviewRun,
+} from './application/review-stage.ts';
+export {
+  handlerFor,
+  type StageHandler,
+  type StagePrecondition,
+} from './application/stages.ts';

@@ -51,6 +51,25 @@ export interface LabelActor {
 export interface PullRequest {
   readonly number: number;
   readonly url: string;
+
+  /** The commit at the head of the pull request when it was read. */
+  readonly headSha: string;
+}
+
+/** A line comment of a review, on the new side of the diff. */
+export interface ReviewComment {
+  readonly path: string;
+  readonly line: number;
+  readonly body: string;
+}
+
+/** What the review stage posts on a pull request: a review that comments, never one that approves. */
+export interface ReviewDraft {
+  readonly repository: string;
+  readonly number: number;
+  readonly headSha: string;
+  readonly body: string;
+  readonly comments: readonly ReviewComment[];
 }
 
 /** What the pipeline asks the repository host to open. */
@@ -86,6 +105,12 @@ export interface RepoHostPort {
 
   /** The names in a directory on the default branch; empty when it does not exist. */
   listDirectory(repository: string, path: string): Promise<string[]>;
+
+  /** Whether the pipeline already reviewed the pull request at this head commit. */
+  hasAgentReview(repository: string, number: number, headSha: string): Promise<boolean>;
+
+  /** Posts a review that only comments; it never approves or requests changes. */
+  submitReview(review: ReviewDraft): Promise<void>;
 }
 
 /** A checkout prepared for one run. */
@@ -123,6 +148,9 @@ export interface WorkspacePort {
 /** What a stage asks an agent to do. */
 export interface AgentRequest {
   readonly stage: string;
+
+  /** `change` edits and commits; `review` only reads and reports a verdict. */
+  readonly task: 'change' | 'review';
   readonly cwd: string;
   readonly prompt: string;
   readonly maxTurns: number;
@@ -139,6 +167,12 @@ export interface AgentResult {
   readonly pullRequest: {
     readonly title: string;
     readonly body: string;
+  } | undefined;
+
+  /** The verdict and line comments of a `review` task. */
+  readonly review: {
+    readonly verdict: 'approve' | 'changes';
+    readonly comments: readonly ReviewComment[];
   } | undefined;
 }
 
