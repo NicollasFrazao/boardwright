@@ -387,6 +387,67 @@ describe('GitWorkspaces', () => {
     )).toBe('agent/issue-7');
   });
 
+  it('counts only the commits of this run on a branch that already has commits', async () => {
+    const first = await workspaces.prepare(request);
+
+    await writeFile(
+      join(
+        first.path,
+        'a.ts',
+      ),
+      'a\n',
+    );
+
+    await git(
+      first.path,
+      'add',
+      '.',
+    );
+
+    await git(
+      first.path,
+      'commit',
+      '-m',
+      'a',
+    );
+
+    await workspaces.push(first);
+    await workspaces.dispose(first);
+
+    const next = await workspaces.prepare(request);
+
+    expect(next.startSha).toBe(await git(
+      remote,
+      'rev-parse',
+      'agent/issue-7',
+    ));
+
+    expect(await workspaces.hasCommits(next)).toBe(false);
+
+    await writeFile(
+      join(
+        next.path,
+        'b.ts',
+      ),
+      'b\n',
+    );
+
+    await git(
+      next.path,
+      'add',
+      '.',
+    );
+
+    await git(
+      next.path,
+      'commit',
+      '-m',
+      'b',
+    );
+
+    expect(await workspaces.hasCommits(next)).toBe(true);
+  });
+
   it('removes the worktree and its local branch', async () => {
     const workspace = await workspaces.prepare(request);
 
