@@ -2,6 +2,8 @@ import { Octokit } from '@octokit/rest';
 
 const HTTP_NOT_FOUND = 404;
 
+const HTTP_UNPROCESSABLE = 422;
+
 const QUIET_LOG = {
   debug: (): void => undefined,
   info: (): void => undefined,
@@ -51,4 +53,9 @@ export function splitRepository(repository: string): {
 /** Whether an Octokit error is a 404. */
 export function isNotFound(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'status' in error && error.status === HTTP_NOT_FOUND;
+}
+
+/** Whether an Octokit error is a 422, GitHub's answer to a request it understood but cannot apply. */
+export function isUnprocessable(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'status' in error && error.status === HTTP_UNPROCESSABLE;
 }

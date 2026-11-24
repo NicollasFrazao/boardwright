@@ -295,6 +295,7 @@ describe('GitHubRepoHost: repository and pull requests', () => {
           {
             number: 15,
             html_url: 'https://github.com/acme/app/pull/15',
+            head: { sha: 'abc1234' },
           },
         ],
       },
@@ -306,6 +307,7 @@ describe('GitHubRepoHost: repository and pull requests', () => {
     )).toEqual({
       number: 15,
       url: 'https://github.com/acme/app/pull/15',
+      headSha: 'abc1234',
     });
 
     const query = new URLSearchParams(replay.nth(0).path.split('?')[1]);
@@ -341,6 +343,7 @@ describe('GitHubRepoHost: repository and pull requests', () => {
         body: {
           number: 16,
           html_url: 'https://github.com/acme/app/pull/16',
+          head: { sha: 'def5678' },
         },
       },
     ]);
@@ -356,6 +359,7 @@ describe('GitHubRepoHost: repository and pull requests', () => {
     expect(await host.openPullRequest(draft)).toEqual({
       number: 16,
       url: 'https://github.com/acme/app/pull/16',
+      headSha: 'def5678',
     });
 
     expect(replay.nth(0).body).toEqual({
@@ -519,5 +523,152 @@ describe('GitHubRepoHost: labels and files', () => {
       'acme/app',
       'x',
     )).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe('GitHubRepoHost: reviews', () => {
+  const marker = '<!-- boardwright:review v=1 verdict=approve head=abc1234 -->';
+
+  it.each([
+    [
+      'a marked review of the head',
+      [
+        {
+          commit_id: 'abc1234',
+          body: `${marker}\nLooks good.`,
+        },
+      ],
+      true,
+    ],
+    [
+      'only a review of an older commit',
+      [
+        {
+          commit_id: 'old0000',
+          body: '<!-- boardwright:review v=1 verdict=changes head=old0000 -->',
+        },
+      ],
+      false,
+    ],
+    [
+      'only a person\'s review of the head',
+      [
+        {
+          commit_id: 'abc1234',
+          body: 'LGTM',
+        },
+      ],
+      false,
+    ],
+  ])('hasAgentReview with %s → %s', async (
+    _case,
+    reviews,
+    expected,
+  ) => {
+    const { host } = hostWith([
+      {
+        method: 'GET',
+        path: '/repos/acme/app/pulls/15/reviews',
+        body: reviews,
+      },
+    ]);
+
+    expect(await host.hasAgentReview(
+      'acme/app',
+      15,
+      'abc1234',
+    )).toBe(expected);
+  });
+
+  const draft = {
+    repository: 'acme/app',
+    number: 15,
+    headSha: 'abc1234',
+    body: `${marker}\nOne finding.`,
+    comments: [
+      {
+        path: 'src/a.ts',
+        line: 3,
+        body: 'Name this constant.',
+      },
+    ],
+  };
+
+  it('posts a review that only comments, with its line comments on the new side', async () => {
+    const {
+      host,
+      replay,
+    } = hostWith([
+      {
+        method: 'POST',
+        path: '/repos/acme/app/pulls/15/reviews',
+        body: { id: 1 },
+      },
+    ]);
+
+    await host.submitReview(draft);
+
+    expect(replay.nth(0).body).toEqual({
+      commit_id: 'abc1234',
+      event: 'COMMENT',
+      body: draft.body,
+      comments: [
+        {
+          path: 'src/a.ts',
+          line: 3,
+          side: 'RIGHT',
+          body: 'Name this constant.',
+        },
+      ],
+    });
+  });
+
+  it('folds the line comments into the body when GitHub cannot place them', async () => {
+    let calls = 0;
+
+    const {
+      host,
+      replay,
+    } = hostWith([
+      {
+        method: 'POST',
+        path: '/repos/acme/app/pulls/15/reviews',
+        when: () => {
+          calls += 1;
+
+          return calls === 1;
+        },
+        status: 422,
+        body: { message: 'Line could not be resolved' },
+      },
+      {
+        method: 'POST',
+        path: '/repos/acme/app/pulls/15/reviews',
+        body: { id: 2 },
+      },
+    ]);
+
+    await host.submitReview(draft);
+
+    const retry = replay.nth(1).body as {
+      body: string;
+      comments?: unknown;
+    };
+
+    expect(retry.comments).toBeUndefined();
+    expect(retry.body).toContain('- `src/a.ts:3` Name this constant.');
+  });
+
+  it('lets other review errors through', async () => {
+    const { host } = hostWith([
+      {
+        method: 'POST',
+        path: '/repos/acme/app/pulls/15/reviews',
+        status: 500,
+        body: {},
+      },
+    ]);
+
+    await expect(host.submitReview(draft)).rejects.toMatchObject({ status: 500 });
   });
 });
