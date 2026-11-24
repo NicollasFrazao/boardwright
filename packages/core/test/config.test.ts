@@ -25,6 +25,7 @@ describe('parsePipelineConfig', () => {
 
     expect(config.concurrency).toBe(1);
     expect(config.provider.name).toBe('claude');
+    expect(config.git).toEqual({});
 
     expect(config.guardRails).toEqual({
       deniedPaths: DEFAULT_DENIED_PATHS,

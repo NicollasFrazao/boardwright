@@ -133,6 +133,13 @@ async function implementIn(
     );
   }
 
+  if (!await dependencies.workspaces.hasCommits(workspace)) {
+    return outcome(
+      'failed',
+      'The agent changed files but committed nothing, so there is nothing to push.',
+    );
+  }
+
   await dependencies.workspaces.push(workspace);
 
   const pullRequest = await openOrFindPullRequest(

@@ -123,6 +123,21 @@ describe('runImplementStage', () => {
     expect(world.workspaces.pushed).toHaveLength(0);
   });
 
+  it('fails when the agent changed files but committed nothing', async () => {
+    const world = scenario();
+
+    world.workspaces.committed = false;
+
+    const outcome = await runImplementStage(
+      world.dependencies,
+      implementRun(),
+    );
+
+    expect(outcome.event).toBe('failed');
+    expect(outcome.detail).toContain('committed nothing');
+    expect(world.workspaces.pushed).toHaveLength(0);
+  });
+
   it('reports a blocked agent with its question and pushes nothing', async () => {
     const world = scenario();
 

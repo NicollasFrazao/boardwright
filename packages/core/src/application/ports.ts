@@ -111,6 +111,9 @@ export interface WorkspacePort {
   /** Paths changed on the branch relative to `base`, committed or not, using `/` separators. */
   changedPaths(workspace: Workspace): Promise<string[]>;
 
+  /** Whether the branch has commits that `base` does not. */
+  hasCommits(workspace: Workspace): Promise<boolean>;
+
   /** Pushes the branch without force. */
   push(workspace: Workspace): Promise<void>;
 

@@ -77,6 +77,13 @@ export const pipelineConfigSchema = z.object({
     name: z.string().min(1).default('claude'),
     model: z.string().min(1).optional(),
   }).strict().prefault({}),
+  git: z.object({
+    /** Who the agent's commits are attributed to; without it, git's own config on the machine decides. */
+    author: z.object({
+      name: z.string().min(1),
+      email: z.string().min(1),
+    }).strict().optional(),
+  }).strict().prefault({}),
   guardRails: z.object({
     deniedPaths: z.array(z.string().min(1)).default([...DEFAULT_DENIED_PATHS]),
     maxTurns: z.int().positive().default(DEFAULT_MAX_TURNS),
