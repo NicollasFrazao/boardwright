@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a new stage, provider, guard rail or runtime behaviour.
+title: 'feat: '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What a team cannot do with its board and agents today, or which failure mode is not covered.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The behaviour you want, including what happens when the agent fails mid-stage, when two runners see the same item and when a human moves the card.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: I checked the open issues and the technical debt in .context/docs/tech-debt.md
+          required: true

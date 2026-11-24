@@ -1,0 +1,34 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      # The runtime is Node 24 (CI, the runner, the Action); its types move with it, not ahead of it.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # typescript-eslint has no support for TypeScript 7 yet; revisit when it does.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+    groups:
+      lint:
+        patterns:
+          - 'eslint*'
+          - '@eslint/*'
+          - '@stylistic/*'
+          - 'typescript-eslint'
+      test:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci

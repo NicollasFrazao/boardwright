@@ -1,0 +1,41 @@
+name: Bug report
+description: The pipeline moved a card, ran an agent or touched a pull request differently from what the docs say.
+title: 'fix: '
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The board item and its Status before and after, the stage that ran, and what it did to the issue or pull request.
+      placeholder: |
+        Issue #12 in Ready with the `agent` label -> claimed twice, two branches agent/issue-12 were pushed
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: Which documented stage rule, guard rail or merge policy condition this contradicts.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Ideally a failing test against tick() with fake ports; otherwise the config, the board state and the events.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      placeholder: e.g. 1a2b3c4
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The runner's JSON log lines for the tick, with tokens and private repository content removed.
+      render: json
