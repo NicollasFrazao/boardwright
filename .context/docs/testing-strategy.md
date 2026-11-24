@@ -24,6 +24,11 @@ dies) ordinary tests.
 | `unit` | `packages/*/test/**/*.test.ts` | Domain rules, `tick()` with fake ports, config parsing, adapters against recorded payloads |
 | `tooling` | `eslint-rules/**/*.test.mjs`, `scripts/**/*.test.mjs` | The local ESLint rules (RuleTester) and the agent-surface scripts |
 
+The test doubles live in `packages/testing` and are imported as `@boardwright/testing`: `scenario()` wires
+fakes of every port around one triggered issue, and `GitHubReplay` is a `fetch` for Octokit that answers
+from canned routes and records every request. A request no route matches fails with its method and
+path, so a missing fixture is never mistaken for a 404.
+
 End-to-end runs against a real board and a sandbox repository are manual checks listed in the pull
 request of each phase (#5–#8), not CI jobs: they need tokens and an agent.
 
@@ -43,7 +48,8 @@ npm run test:coverage   # with the 80% gate, as CI runs it
 
 ## Fixtures
 
-- Board and pull-request payloads recorded from the GitHub API, with ids and logins replaced.
+- GitHub payloads in the shape the real API returned when the adapters were run read-only against a
+  real board (`packages/github/test`), with ids and logins replaced.
 - Copies of real `.context` bases (agents and skills with their `phases` front matter) to test how a
   stage's prompt is assembled, plus a repository without `.context` for the plain fallback.
 

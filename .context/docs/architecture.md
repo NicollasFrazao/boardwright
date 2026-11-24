@@ -35,9 +35,10 @@ laptop and in GitHub Actions.
 | `packages/core` (`src/domain`) | Domain | Work items, stages, run markers, guard-rail and merge-policy rules; pure | #3 |
 | `packages/core` (`src/application`) | Application | Config schema (zod), ports, `tick()` | #3 |
 | `packages/context` | Infrastructure | `ContextProvider`: the repository's dotcontext base, or `AGENTS.md`/`CLAUDE.md` | #3 |
-| `packages/github` | Infrastructure | Projects v2 (GraphQL), issues, pull requests, review threads, checks | #4 |
+| `packages/github` | Infrastructure | `BoardPort` on a Projects v2 board of a user or an organization (GraphQL); `RepoHostPort` on the REST API: issues, comments, the labeller from the issue's events, pull requests, labels, files | #4 |
 | `packages/agent-claude` | Infrastructure | `AgentProvider` on the Claude Agent SDK | #5 |
-| `packages/runner` | Interface | CLI and daemon: `run`, `once`, `doctor`, `init` | #4, #8 |
+| `packages/runner` | Interface | CLI: `doctor`, `once --dry-run`, `init` (#4); `once` with agents (#5) and the daemon `run` (#8) | #4, #5, #8 |
+| `packages/testing` | (tests only) | Fakes of every port and a replay of the GitHub API; no `src` may import it | #4 |
 | `action/` | Interface | GitHub Action: one `tick()` per event | #8 |
 
 ## Layer rules
@@ -51,6 +52,7 @@ Checked by dependency-cruiser (`npm run check:architecture`, `.dependency-cruise
 - Outside the core, only its public API (`packages/core/src/index.ts`) is imported.
 - Nothing imports `runner` or `action`: they are composition roots.
 - Source never imports tests; published code never needs a devDependency at run time.
+- No `src` imports `packages/testing`.
 - No cycles, no orphan modules.
 
 **Why:** a new provider or a new runtime is then one package that implements a port. Nothing in the

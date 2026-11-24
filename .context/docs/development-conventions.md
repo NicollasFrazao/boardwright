@@ -52,7 +52,14 @@ Enforced by `npm run check:architecture`. See [architecture.md](architecture.md)
   core, through its public API (`packages/core/src/index.ts`), never another adapter.
 - `packages/runner` and `action/` are composition roots: the only modules that read `process.env`,
   read tokens or construct clients. Nothing imports them.
-- No cycles. No orphan module.
+- No `src` imports `packages/testing` (the test doubles). No cycles. No orphan module.
+
+## TypeScript that runs without a build
+
+The source runs on Node 24 as it is (`npm run boardwright -- doctor`), so it uses only TypeScript that
+Node can erase: no `enum`, no `namespace`, no parameter properties (`constructor(private x)`). Declare
+the field and assign it. `erasableSyntaxOnly` in `tsconfig.json` enforces this; relative imports name
+the `.ts` file.
 
 ## Agent safety rules you must not break
 

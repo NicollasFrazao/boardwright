@@ -22,6 +22,11 @@ scaffoldVersion: "2.0.0"
 | `check:unused` | knip (`knip.jsonc`) | Unused files, exports, types and dependencies |
 | `test` / `test:coverage` | Vitest 5 (`vitest.config.ts`) | Behaviour; coverage below 80% fails |
 | `export:context` / `check:context` | `scripts/check-context-surfaces.mjs` | Agent surfaces drifting from `.context/docs/README.md` |
+| `boardwright -- <command>` | `packages/runner/src/cli.ts` on Node 24 | Runs the CLI from source (see development-workflow.md) |
+
+The test override in `eslint.config.js` (magic numbers and repeated strings allowed) also covers
+`packages/testing/src`, which is test code. Coverage leaves out `packages/runner/src/cli.ts`, the
+composition root; `runProgram`, which it calls, is fully tested.
 
 
 ## Local rules (`eslint-rules/`)
