@@ -34,6 +34,7 @@ laptop and in GitHub Actions.
 | --- | --- | --- | --- |
 | `packages/core` (`src/domain`) | Domain | Work items, stages, run markers, guard-rail and merge-policy rules; pure | #3 |
 | `packages/core` (`src/application`) | Application | Config schema (zod), ports, `tick()` | #3 |
+| `packages/context` | Infrastructure | `ContextProvider`: the repository's dotcontext base, or `AGENTS.md`/`CLAUDE.md` | #3 |
 | `packages/github` | Infrastructure | Projects v2 (GraphQL), issues, pull requests, review threads, checks | #4 |
 | `packages/agent-claude` | Infrastructure | `AgentProvider` on the Claude Agent SDK | #5 |
 | `packages/runner` | Interface | CLI and daemon: `run`, `once`, `doctor`, `init` | #4, #8 |
@@ -46,7 +47,8 @@ Checked by dependency-cruiser (`npm run check:architecture`, `.dependency-cruise
 - `core/src/domain` imports only Node built-ins.
 - `core/src/application` imports only the domain and zod.
 - `core` imports no other package.
-- An adapter (`github`, `agent-*`) imports only the core, never another adapter.
+- An adapter (`context`, `github`, `agent-*`) imports only the core, never another adapter.
+- Outside the core, only its public API (`packages/core/src/index.ts`) is imported.
 - Nothing imports `runner` or `action`: they are composition roots.
 - Source never imports tests; published code never needs a devDependency at run time.
 - No cycles, no orphan modules.
@@ -60,19 +62,33 @@ core changes, and nothing in one adapter can break another.
 acts. Each action is idempotent, so a tick can be repeated, interrupted or run by two runners without
 doing the work twice:
 
-1. Read the items whose Status is mapped to a stage, for the repositories in the allowlist.
-2. For each item, evaluate the stage rule (`when`), the trigger checks and the guard rails.
-3. Claim: write the run marker (stage, run id, attempt) and move the Status (`claim`).
-4. Run the stage in its own git worktree through the `AgentProvider`.
-5. Check the result (path denylist, the repository's gate), then move the Status (`done`) or comment
-   why not.
+1. Read the board; for each stage, take the items in its `when` Status.
+2. Plan each item (`packages/core/src/application/tick.ts`): repository allowlist, open issue, trigger
+   label added by someone with triage, then the markers decide (`domain/run-decision.ts`): start an
+   attempt, wait for a run in flight, repair the Status after a success, or give up.
+3. Claim: write a `started` marker, re-read the markers, and go on only if it is the earliest claim of
+   that attempt (`isClaimWinner`); then move the Status to `claim`.
+4. Run the stage in its own git worktree (`implement-stage.ts`): the repository's context, the prompt,
+   the agent session.
+5. Check the diff against the path denylist, push without force and open (or find) the pull request.
+6. Write the outcome marker and move the Status: `succeeded` → `done`; `failed` → back to `when` for the
+   next attempt; `blocked` (the agent asked a question) or `denied` (a denied path) → `blocked`, for a
+   person.
+
+At most `concurrency` runs start per tick; the rest are reported as `deferred`. An error on one item is
+reported for that item and the tick goes on. `tick(dependencies, { dryRun: true })` plans without
+writing anything.
 
 ## State lives on GitHub
 
 There is no database ([ADR 0001](./adr/0001-github-as-the-state-store.md)). The Status of the item
 says where it is; a hidden marker comment on the issue
-(`<!-- boardwright:run stage=… id=… attempt=… -->`) says which run owns it and how many attempts
-were made. A local lock file per item only prevents two runs on the same machine.
+(`<!-- boardwright:run v=1 stage=implement run=<id> attempt=<n> event=<event> -->`, `domain/run-marker.ts`)
+records each run's start and outcome, so the next tick knows which run owns the item and how many
+attempts were made. Events: `started`, `succeeded`, `failed`, `blocked`, `denied`, `gave-up`. A run
+without an outcome after its timeout plus a 5-minute grace is presumed dead and counts as an attempt.
+After the last attempt the pipeline writes `gave-up` and leaves the issue to a person; deleting that
+comment lets it try again.
 
 ## Stages
 
@@ -86,7 +102,12 @@ were made. A local lock file per item only prevents two runs on the same machine
 | document (opt-in) | Done | C | Pull request updating the `.context` docs the change touched |
 
 The playbook and the skills for each stage come from the target repository's `.context` through the
-`ContextProvider` port (dotcontext adapter, plain fallback). See issue #3 for the dotcontext tools used.
+`ContextProvider` port (`packages/context`): with a `.context/agents` or `.context/skills` directory,
+the dotcontext adapter reads the front matter (`agentType`, `skillSlug`, `phases`) of the files the
+repository has; otherwise the plain adapter lists `AGENTS.md`, `CLAUDE.md` and `.claude/CLAUDE.md`. The
+playbook is the stage's `context.agent`, overridden by the first matching label in
+`context.agentByLabel` (`bug` → `bug-fixer`). The dotcontext MCP's own selection is not used: it adds
+built-in agents and skills the repository may have removed (issue #3).
 
 ## Guard rails
 

@@ -23,8 +23,6 @@ scaffoldVersion: "2.0.0"
 | `test` / `test:coverage` | Vitest 5 (`vitest.config.ts`) | Behaviour; coverage below 80% fails |
 | `export:context` / `check:context` | `scripts/check-context-surfaces.mjs` | Agent surfaces drifting from `.context/docs/README.md` |
 
-The `check:architecture` target is `scripts` and `eslint-rules` until the first package lands; #3 adds
-`packages`, and adds the `packages/*` workspace to `knip.jsonc`.
 
 ## Local rules (`eslint-rules/`)
 

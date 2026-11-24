@@ -1,0 +1,15 @@
+{
+  "name": "@boardwright/context",
+  "version": "0.0.0",
+  "description": "Reads a repository's own agent guidance (a dotcontext base, or AGENTS.md/CLAUDE.md) for a boardwright stage.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@boardwright/core": "0.0.0",
+    "yaml": "2.9.1"
+  }
+}

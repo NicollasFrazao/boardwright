@@ -1,0 +1,14 @@
+{
+  "name": "@boardwright/core",
+  "version": "0.0.0",
+  "description": "The boardwright core: config schema, ports, the reconciliation loop and the guard rails.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}

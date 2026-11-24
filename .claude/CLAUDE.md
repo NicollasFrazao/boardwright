@@ -63,7 +63,9 @@ develops others:
 
 ## Repository map
 
-- `packages/` — npm workspaces: `core`, `github`, `agent-claude`, `runner` (land from #3 on)
+- `packages/core/` — domain (markers, run decisions, guard rails) and application (config, ports, `tick()`)
+- `packages/context/` — the `ContextProvider` adapters: dotcontext base and plain fallback
+- `packages/` — `github`, `agent-claude` and `runner` land in #4, #5 and #8
 - `eslint-rules/` — local readability rules, with RuleTester tests
 - `scripts/` — `check-context-surfaces.mjs` (export and check of the agent surfaces)
 - `.context/` — this knowledge base
