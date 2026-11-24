@@ -45,6 +45,11 @@ issue labelled `agent` (by someone with triage)
 
 ## Failure handling
 
-- A run that dies leaves its marker; the next tick sees an attempt without a result after the timeout
-  and counts it as failed, then retries up to `maxAttempts` or comments and stops.
+- A run that dies leaves its `started` marker; once its timeout plus a 5-minute grace has passed, the
+  next tick counts it as an attempt and starts the next one, up to `maxAttempts`, then writes `gave-up`
+  and moves the card to the `blocked` Status.
+- A failed run goes back to the `when` Status and is retried by the next tick; a blocked or denied run
+  goes to the `blocked` Status and waits for a person.
+- Two runners that claim the same attempt both write `started`; each re-reads the markers and only the
+  earliest claim goes on.
 - A push rejected by the ruleset or the path denylist is a failed attempt, never retried with force.
