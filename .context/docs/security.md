@@ -41,6 +41,8 @@ the people who could have made the change themselves.
   request; `once` refuses to run a config with a merge stage without it. The merger merges at the
   evaluated head commit (`sha`), so a push after the evaluation fails the merge instead of merging
   unchecked commits, and it never bypasses the ruleset: it falls back to native auto-merge.
+- **Merge gatekeeper (`mode: agent`):** a read-only session asked only after the policy passed. It can
+  veto a merge, never force one, and the policy is judged again after it before anything is merged.
 - **Agent credentials:** only the Agent SDK's documented methods (`ANTHROPIC_API_KEY`, Bedrock, Claude
   Platform on AWS, Google Cloud, Foundry), never a claude.ai login, and never stored or managed by
   boardwright. See [ADR 0004](./adr/0004-agent-credentials-through-documented-methods.md).
