@@ -1,6 +1,9 @@
 import type {
+  ChecksState,
   Feedback,
   Issue,
+  MergeFacts,
+  Mergeability,
   IssueComment,
   IssueRef,
   LabelActor,
@@ -89,6 +92,77 @@ interface FeedbackQuery {
       };
     } | null;
   } | null;
+}
+
+const MERGE_FACTS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      id headRefOid isDraft mergeable additions deletions
+      autoMergeRequest { enabledAt }
+      labels(first: 50) { nodes { name } }
+      files(first: 100) { nodes { path } }
+      reviewThreads(first: 100) { nodes { isResolved } }
+      reviews(last: 50) { nodes { body commit { oid } } }
+      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+    }
+  }
+}`;
+
+interface Rollup {
+  readonly state: string;
+}
+
+interface RollupCommit {
+  readonly statusCheckRollup: Rollup | null;
+}
+
+interface MergeFactsQuery {
+  readonly repository: {
+    readonly pullRequest: {
+      readonly id: string;
+      readonly headRefOid: string;
+      readonly isDraft: boolean;
+      readonly mergeable: string;
+      readonly additions: number;
+      readonly deletions: number;
+      readonly autoMergeRequest: { readonly enabledAt: string } | null;
+      readonly labels: { readonly nodes: readonly { readonly name: string }[] };
+      readonly files: { readonly nodes: readonly { readonly path: string }[] };
+      readonly reviewThreads: { readonly nodes: readonly { readonly isResolved: boolean }[] };
+      readonly reviews: {
+        readonly nodes: readonly {
+          readonly body: string;
+          readonly commit: { readonly oid: string } | null;
+        }[];
+      };
+      readonly commits: { readonly nodes: readonly { readonly commit: RollupCommit }[] };
+    };
+  };
+}
+
+function checksStateOf(state: string | undefined): ChecksState {
+  switch (state) {
+    case 'SUCCESS':
+      return 'passing';
+    case 'FAILURE':
+    case 'ERROR':
+      return 'failing';
+    case undefined:
+      return 'none';
+    default:
+      return 'pending';
+  }
+}
+
+function mergeabilityOf(mergeable: string): Mergeability {
+  switch (mergeable) {
+    case 'MERGEABLE':
+      return 'mergeable';
+    case 'CONFLICTING':
+      return 'conflicting';
+    default:
+      return 'unknown';
+  }
 }
 
 /** The name of a check run or a commit status that failed; nothing for one that passed or is running. */
@@ -312,6 +386,54 @@ export class GitHubRepoHost implements RepoHostPort {
       RESOLVE_THREAD_MUTATION,
       { id: threadId },
     );
+  }
+
+  /**
+   * What the merge policy needs, read in one GraphQL query right before it decides.
+   *
+   * @remarks
+   * Reads the first 100 files, threads and reviews; a pull request beyond that is past the size limit a
+   * merge policy should allow anyway. The changed lines are GitHub's additions plus deletions.
+   */
+  async getMergeFacts(
+    repository: string,
+    number: number,
+  ): Promise<MergeFacts> {
+    const {
+      owner,
+      repo,
+    } = splitRepository(repository);
+
+    const data = await this.client.graphql<MergeFactsQuery>(
+      MERGE_FACTS_QUERY,
+      {
+        owner,
+        name: repo,
+        number,
+      },
+    );
+
+    const pullRequest = data.repository.pullRequest;
+    const headSha = pullRequest.headRefOid;
+
+    const verdicts = pullRequest.reviews.nodes
+      .filter((review) => review.commit?.oid === headSha)
+      .map((review) => parseReviewMarker(review.body))
+      .filter((marker) => marker?.headSha === headSha);
+
+    return {
+      pullRequestId: pullRequest.id,
+      headSha,
+      isDraft: pullRequest.isDraft,
+      labels: pullRequest.labels.nodes.map((label) => label.name),
+      checks: checksStateOf(pullRequest.commits.nodes[0]?.commit.statusCheckRollup?.state),
+      mergeability: mergeabilityOf(pullRequest.mergeable),
+      unresolvedThreads: pullRequest.reviewThreads.nodes.filter((thread) => !thread.isResolved).length,
+      agentVerdict: verdicts.at(-1)?.verdict,
+      changedLines: pullRequest.additions + pullRequest.deletions,
+      changedPaths: pullRequest.files.nodes.map((file) => file.path),
+      isAutoMergeEnabled: pullRequest.autoMergeRequest !== null,
+    };
   }
 
   /** Whether a review carrying the pipeline's marker was posted for this head commit. */

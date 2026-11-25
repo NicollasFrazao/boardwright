@@ -8,3 +8,4 @@ export {
   type ProjectLocation,
 } from './project-board.ts';
 export { GitHubRepoHost } from './repo-host.ts';
+export { GitHubMerger } from './merger.ts';
