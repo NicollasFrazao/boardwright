@@ -16,6 +16,8 @@ import {
 import { sleep } from './daemon.ts';
 import { acquireFileLock } from './lock.ts';
 import { runProgram } from './program.ts';
+// The root manifest carries the release version; esbuild inlines it, so dist/ prints the version it was built from.
+import manifest from '../../../package.json' with { type: 'json' };
 
 function hasCode(
   error: unknown,
@@ -60,6 +62,7 @@ for (const signal of [
 process.exitCode = await runProgram(
   process.argv.slice(2),
   {
+    version: manifest.version,
     variables: process.env,
     readFile: (path) => readFile(
       path,

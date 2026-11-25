@@ -35700,6 +35700,7 @@ Options:
   --config <path>   The config file (default: ${DEFAULT_CONFIG_PATH})
   --json            Print the report as JSON
   --help            Show this help
+  --version, -v     Print the version
 
 The GitHub token is read from BOARDWRIGHT_GITHUB_TOKEN, GITHUB_TOKEN or GH_TOKEN. It needs read access to the
 board (a classic token needs the project scope for a user's project) and, for once, write access to the
@@ -35742,6 +35743,10 @@ async function dispatch(argv, environment) {
       config: { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean" },
+      version: {
+        type: "boolean",
+        short: "v"
+      },
       "dry-run": { type: "boolean" },
       interval: { type: "string" },
       owner: { type: "string" },
@@ -35758,6 +35763,10 @@ async function dispatch(argv, environment) {
     configPath: typeof values.config === "string" ? values.config : DEFAULT_CONFIG_PATH,
     json: values.json === true
   };
+  if (values.version === true) {
+    environment.stdout(environment.version);
+    return EXIT.ok;
+  }
   if (values.help === true || command === void 0 || command === "help") {
     environment.stdout(USAGE);
     return EXIT.ok;
@@ -35998,6 +36007,61 @@ function jsonLogger(environment) {
   };
 }
 
+// package.json
+var package_default = {
+  name: "boardwright-monorepo",
+  version: "0.1.2",
+  description: "Agentic delivery pipelines driven by GitHub Projects: board columns map to agent roles, run locally or in GitHub Actions.",
+  license: "MIT",
+  author: "N\xEDcollas Fraz\xE3o",
+  private: true,
+  type: "module",
+  workspaces: [
+    "packages/*"
+  ],
+  engines: {
+    node: ">=26"
+  },
+  scripts: {
+    lint: "eslint . --max-warnings 0",
+    typecheck: "tsc --noEmit",
+    test: "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run --project unit",
+    "test:tooling": "vitest run --project tooling",
+    "test:coverage": "vitest run --coverage",
+    boardwright: "node packages/runner/src/cli.ts",
+    "check:architecture": "depcruise packages scripts eslint-rules --config .dependency-cruiser.cjs",
+    "check:unused": "knip",
+    "check:context": "node scripts/check-context-surfaces.mjs",
+    "export:context": "node scripts/check-context-surfaces.mjs --write",
+    prepare: "husky",
+    "build:action": "node scripts/build-action.mjs",
+    "build:npm": "node scripts/build-npm.mjs"
+  },
+  devDependencies: {
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "6.0.1",
+    "@types/node": "26.6.6",
+    "@vitest/coverage-v8": "5.1.1",
+    "dependency-cruiser": "18.8.0",
+    esbuild: "0.28.2",
+    eslint: "10.15.0",
+    "eslint-plugin-jsdoc": "65.5.0",
+    "eslint-plugin-sonarjs": "4.2.2",
+    globals: "17.14.0",
+    husky: "9.1.7",
+    knip: "6.47.0",
+    "lint-staged": "17.6.1",
+    typescript: "5.9.3",
+    "typescript-eslint": "8.73.0",
+    vite: "8.3.8",
+    vitest: "5.1.1"
+  }
+};
+
 // packages/runner/src/cli.ts
 function hasCode(error62, code) {
   return error62 instanceof Error && "code" in error62 && error62.code === code;
@@ -36032,6 +36096,7 @@ for (const signal of [
 process.exitCode = await runProgram(
   process.argv.slice(2),
   {
+    version: package_default.version,
     variables: process.env,
     readFile: (path) => readFile3(
       path,

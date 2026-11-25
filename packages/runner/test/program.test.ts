@@ -53,6 +53,7 @@ function environment(
     out,
     err,
     tokens,
+    version: '1.2.3',
     variables,
     readFile: (path) => Promise.resolve(files.get(path)),
     createFile: (
@@ -485,6 +486,29 @@ describe('boardwright help', () => {
     )).toBe(EXIT.ok);
 
     expect(env.out).toEqual([USAGE]);
+  });
+
+  it.each([
+    [['--version']],
+    [['-v']],
+    [[
+      'doctor',
+      '--version',
+    ]],
+  ])('prints the version for %j and exits 0', async (argv) => {
+    const env = environment();
+
+    expect(await runProgram(
+      argv,
+      env,
+    )).toBe(EXIT.ok);
+
+    expect(env.out).toEqual(['1.2.3']);
+    expect(env.tokens).toEqual([]);
+  });
+
+  it('lists --version in the usage', () => {
+    expect(USAGE).toContain('--version, -v');
   });
 
   it('exits 2 on an unknown command', async () => {
