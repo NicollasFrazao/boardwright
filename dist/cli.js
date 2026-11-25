@@ -36008,59 +36008,7 @@ function jsonLogger(environment) {
 }
 
 // package.json
-var package_default = {
-  name: "boardwright-monorepo",
-  version: "0.1.2",
-  description: "Agentic delivery pipelines driven by GitHub Projects: board columns map to agent roles, run locally or in GitHub Actions.",
-  license: "MIT",
-  author: "N\xEDcollas Fraz\xE3o",
-  private: true,
-  type: "module",
-  workspaces: [
-    "packages/*"
-  ],
-  engines: {
-    node: ">=26"
-  },
-  scripts: {
-    lint: "eslint . --max-warnings 0",
-    typecheck: "tsc --noEmit",
-    test: "vitest run",
-    "test:watch": "vitest",
-    "test:unit": "vitest run --project unit",
-    "test:tooling": "vitest run --project tooling",
-    "test:coverage": "vitest run --coverage",
-    boardwright: "node packages/runner/src/cli.ts",
-    "check:architecture": "depcruise packages scripts eslint-rules --config .dependency-cruiser.cjs",
-    "check:unused": "knip",
-    "check:context": "node scripts/check-context-surfaces.mjs",
-    "export:context": "node scripts/check-context-surfaces.mjs --write",
-    prepare: "husky",
-    "build:action": "node scripts/build-action.mjs",
-    "build:npm": "node scripts/build-npm.mjs"
-  },
-  devDependencies: {
-    "@commitlint/cli": "21.2.4",
-    "@commitlint/config-conventional": "21.2.4",
-    "@eslint/js": "10.0.1",
-    "@stylistic/eslint-plugin": "6.0.1",
-    "@types/node": "26.6.6",
-    "@vitest/coverage-v8": "5.1.1",
-    "dependency-cruiser": "18.8.0",
-    esbuild: "0.28.2",
-    eslint: "10.15.0",
-    "eslint-plugin-jsdoc": "65.5.0",
-    "eslint-plugin-sonarjs": "4.2.2",
-    globals: "17.14.0",
-    husky: "9.1.7",
-    knip: "6.47.0",
-    "lint-staged": "17.6.1",
-    typescript: "5.9.3",
-    "typescript-eslint": "8.73.0",
-    vite: "8.3.8",
-    vitest: "5.1.1"
-  }
-};
+var package_default = { version: "0.1.2" };
 
 // packages/runner/src/cli.ts
 function hasCode(error62, code) {
