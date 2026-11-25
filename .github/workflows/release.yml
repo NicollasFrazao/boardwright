@@ -33,4 +33,13 @@ jobs:
           npm run build:action
           test -z "$(git status --porcelain --untracked-files=all -- dist)"
       - run: npm run build:npm
-      - run: npm publish ./build/npm --access public
+      # A version already on npm (the first one is published by hand, before trusted publishing can be set
+      # up for the package) is left alone, so a rerun of the workflow never fails on it.
+      - name: Publish, unless this version is already on npm
+        run: |
+          version="$(node -p 'require("./build/npm/package.json").version')"
+          if npm view "boardwright@$version" version > /dev/null 2>&1; then
+            echo "boardwright@$version is already on npm; nothing to publish."
+          else
+            npm publish ./build/npm --access public
+          fi
