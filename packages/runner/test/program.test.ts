@@ -13,6 +13,7 @@ import {
   runProgram,
   USAGE,
   type ProgramEnvironment,
+  type AppCredentials,
 } from '../src/program.ts';
 
 const CONFIG = `project:
@@ -32,6 +33,7 @@ interface TestEnvironment extends ProgramEnvironment {
   readonly out: string[];
   readonly err: string[];
   readonly tokens: string[];
+  readonly apps: AppCredentials[];
 }
 
 function environment(
@@ -48,12 +50,14 @@ function environment(
   const out: string[] = [];
   const err: string[] = [];
   const tokens: string[] = [];
+  const apps: AppCredentials[] = [];
 
   return {
     files,
     out,
     err,
     tokens,
+    apps,
     version: '1.2.3',
     variables,
     readFile: (path) => Promise.resolve(files.get(path)),
@@ -90,6 +94,11 @@ function environment(
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     connectMerger: () => world.merger,
+    connectAppMerger: (credentials) => {
+      apps.push(credentials);
+
+      return world.merger;
+    },
     shutdownSignal: () => shutdown.signal,
     sleep: () => {
       shutdown.abort();
@@ -571,6 +580,102 @@ describe('boardwright once with a merge stage', () => {
     )).toBe(EXIT.usage);
 
     expect(env.err[0]).toContain('BOARDWRIGHT_MERGE_TOKEN');
+  });
+
+  it('merges as the GitHub App when it is configured, with its key read from the file only when used', async () => {
+    const env = environment(
+      scenario(),
+      {
+        GITHUB_TOKEN: 'secret',
+        BOARDWRIGHT_MERGE_TOKEN: 'merge-secret',
+        BOARDWRIGHT_APP_ID: '5925672',
+        BOARDWRIGHT_APP_PRIVATE_KEY_FILE: 'app.pem',
+      },
+    );
+
+    env.files.set(
+      'pipeline.config.yml',
+      MERGE_CONFIG,
+    );
+
+    env.files.set(
+      'app.pem',
+      'PEM',
+    );
+
+    expect(await runProgram(
+      ['once'],
+      env,
+    )).toBe(EXIT.ok);
+
+    expect(env.apps.map((app) => app.appId)).toEqual(['5925672']);
+    expect(await env.apps[0]?.privateKey()).toBe('PEM');
+  });
+
+  it('takes the App key from the environment, and fails clearly on a missing key file', async () => {
+    const env = environment(
+      scenario(),
+      {
+        GITHUB_TOKEN: 'secret',
+        BOARDWRIGHT_APP_ID: '1',
+        BOARDWRIGHT_APP_PRIVATE_KEY: 'PEM-FROM-SECRET',
+      },
+    );
+
+    env.files.set(
+      'pipeline.config.yml',
+      MERGE_CONFIG,
+    );
+
+    await runProgram(
+      ['once'],
+      env,
+    );
+
+    expect(await env.apps[0]?.privateKey()).toBe('PEM-FROM-SECRET');
+
+    const missing = environment(
+      scenario(),
+      {
+        GITHUB_TOKEN: 'secret',
+        BOARDWRIGHT_APP_ID: '1',
+        BOARDWRIGHT_APP_PRIVATE_KEY_FILE: 'nowhere.pem',
+      },
+    );
+
+    missing.files.set(
+      'pipeline.config.yml',
+      MERGE_CONFIG,
+    );
+
+    await runProgram(
+      ['once'],
+      missing,
+    );
+
+    await expect(missing.apps[0]?.privateKey()).rejects.toThrow('The GitHub App key nowhere.pem does not exist.');
+  });
+
+  it('refuses an App id without a key', async () => {
+    const env = environment(
+      scenario(),
+      {
+        GITHUB_TOKEN: 'secret',
+        BOARDWRIGHT_APP_ID: '1',
+      },
+    );
+
+    env.files.set(
+      'pipeline.config.yml',
+      MERGE_CONFIG,
+    );
+
+    expect(await runProgram(
+      ['once'],
+      env,
+    )).toBe(EXIT.usage);
+
+    expect(env.err[0]).toContain('BOARDWRIGHT_APP_PRIVATE_KEY_FILE');
   });
 
   it('runs with the merge token, and plans without one in a dry run', async () => {

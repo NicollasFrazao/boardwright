@@ -8,7 +8,9 @@ import { join } from 'node:path';
 import { ClaudeAgentProvider } from '@boardwright/agent-claude';
 import { GitWorkspaces } from '@boardwright/git';
 import {
+  appMerger,
   createGitHubClient,
+  GitHubAppTokens,
   GitHubMerger,
   GitHubRepoHost,
   ProjectBoard,
@@ -129,6 +131,7 @@ process.exitCode = await runProgram(
       `${name}.lock`,
     )),
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
+    connectAppMerger: (credentials) => appMerger(new GitHubAppTokens(credentials)),
     connectAgents: (
       config,
       token,

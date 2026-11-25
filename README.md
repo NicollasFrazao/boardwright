@@ -221,8 +221,11 @@ label and not the opt-out one, its checks pass, it has no conflict and no unreso
 changed path is denied, it is small enough, and (with `agentApproval`) the pipeline's review of the head
 commit approves. It is merged at the commit that was evaluated, so a push after the evaluation fails the
 merge instead of merging unchecked code. A ruleset that still holds it gets native auto-merge; nothing
-bypasses it. The stage needs `BOARDWRIGHT_MERGE_TOKEN`, an identity other than the one that opened the
-pull request.
+bypasses it. The stage needs an identity other than the one that opened the pull request: a GitHub App
+you register and install on the repositories (`BOARDWRIGHT_APP_ID` with `BOARDWRIGHT_APP_PRIVATE_KEY_FILE`,
+or `BOARDWRIGHT_APP_PRIVATE_KEY` in CI; [ADR 0005](.context/docs/adr/0005-github-app-as-the-pipeline-identity.md)),
+which merges as `<app>[bot]`, or a token of another account, `BOARDWRIGHT_MERGE_TOKEN`. The App wins when both
+are set.
 
 ```yaml
   - id: merge
