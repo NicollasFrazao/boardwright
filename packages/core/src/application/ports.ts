@@ -55,6 +55,9 @@ export interface Issue {
   readonly body: string;
   readonly labels: readonly string[];
   readonly isOpen: boolean;
+
+  /** The logins of the people the issue is assigned to. */
+  readonly assignees: readonly string[];
 }
 
 /** Who added a label, and their permission on the repository. */
@@ -134,6 +137,9 @@ export interface PullRequestDraft {
   readonly base: string;
   readonly title: string;
   readonly body: string;
+
+  /** The logins to assign: the issue's, so the pull request reaches the same people. */
+  readonly assignees: readonly string[];
 }
 
 /** Issues, comments and pull requests on the repository host. */

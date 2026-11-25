@@ -237,6 +237,7 @@ describe('buildFeedbackPrompt', () => {
         body: 'Body',
         labels: ['boardwright:agent'],
         isOpen: true,
+        assignees: [],
       },
       pullRequest: {
         number: 9,

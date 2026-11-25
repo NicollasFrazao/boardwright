@@ -34,7 +34,7 @@ access to the repository) and moving its card to the Status a stage starts from.
 | Stage | Starts from | While it runs | When it succeeds | When the agent needs a person | What the agent does |
 | --- | --- | --- | --- | --- | --- |
 | `refine` (optional) | Refine | — | Ready | Todo | Reads the code and posts a plan on the issue; changes nothing |
-| `implement` | Ready | In Progress | In review | Todo | Works on its own branch and opens a pull request that closes the issue |
+| `implement` | Ready | In Progress | In review | Todo | Works on its own branch and opens a pull request that closes the issue, assigned to the issue's assignees |
 | `review` | In review | — | — | — | Reviews each new head of the pull request; comments only, never approves |
 | `address-feedback` | In review | — | — | — | Pushes fixes for unresolved review threads and failing checks, then the pipeline resolves the threads it addressed |
 | `merge` (opt-in) | In review | — | — | — | No agent by default: a deterministic policy merges through native auto-merge |

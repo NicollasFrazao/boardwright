@@ -27812,7 +27812,8 @@ async function openOrFindPullRequest(repoHost, issue2, workspace, draft) {
     body: withClosingKeyword(
       draft?.body ?? "",
       issue2.ref.number
-    )
+    ),
+    assignees: issue2.assignees
   });
 }
 function withClosingKeyword(body, issueNumber) {
@@ -34735,7 +34736,8 @@ var GitHubRepoHost = class {
       title: data.title,
       body: data.body ?? "",
       labels: data.labels.map((label) => typeof label === "string" ? label : label.name ?? ""),
-      isOpen: data.state === "open"
+      isOpen: data.state === "open",
+      assignees: (data.assignees ?? []).map((user) => user.login)
     };
   }
   /**
@@ -34855,7 +34857,13 @@ var GitHubRepoHost = class {
       headSha: pullRequest.head.sha
     };
   }
-  /** Opens a pull request. */
+  /**
+   * Opens a pull request and assigns the draft's assignees.
+   *
+   * @remarks
+   * The create endpoint takes no assignees, so they are a second request; GitHub silently drops a login
+   * that cannot be assigned.
+   */
   async openPullRequest(draft) {
     const { data } = await this.client.rest.pulls.create({
       ...splitRepository(draft.repository),
@@ -34864,6 +34872,13 @@ var GitHubRepoHost = class {
       title: draft.title,
       body: draft.body
     });
+    if (draft.assignees.length > 0) {
+      await this.client.rest.issues.addAssignees({
+        ...splitRepository(draft.repository),
+        issue_number: data.number,
+        assignees: [...draft.assignees]
+      });
+    }
     return {
       number: data.number,
       url: data.html_url,

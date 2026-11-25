@@ -26,6 +26,7 @@ function implementRun(labels: string[] = ['boardwright:agent']): ImplementRun {
       body: 'Body',
       labels,
       isOpen: true,
+      assignees: ['maintainer'],
     },
     stage: firstStage(config),
     deniedPaths: config.guardRails.deniedPaths,
@@ -36,7 +37,7 @@ function implementRun(labels: string[] = ['boardwright:agent']): ImplementRun {
 }
 
 describe('runImplementStage', () => {
-  it('pushes, opens the pull request that closes the issue and disposes the worktree', async () => {
+  it('pushes, opens the pull request that closes the issue for the issue\'s assignees, and disposes the worktree', async () => {
     const world = scenario();
 
     const outcome = await runImplementStage(
@@ -58,6 +59,7 @@ describe('runImplementStage', () => {
       base: 'master',
       title: 'feat(app): add the feature',
       body: 'Adds the feature.\n\nCloses #7',
+      assignees: ['maintainer'],
     });
 
     expect(world.workspaces.disposed).toHaveLength(1);

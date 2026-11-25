@@ -71,6 +71,7 @@ describe('GitHubRepoHost: issues and comments', () => {
             { name: 'agent' },
             'bug',
           ],
+          assignees: [{ login: 'octocat' }],
         },
       },
     ]);
@@ -84,6 +85,7 @@ describe('GitHubRepoHost: issues and comments', () => {
         'bug',
       ],
       isOpen: false,
+      assignees: ['octocat'],
     });
   });
 
@@ -332,7 +334,7 @@ describe('GitHubRepoHost: repository and pull requests', () => {
     )).toBeUndefined();
   });
 
-  it('opens a pull request from the draft', async () => {
+  it('opens a pull request from the draft, without assigning anyone when the draft has no assignees', async () => {
     const {
       host,
       replay,
@@ -355,6 +357,7 @@ describe('GitHubRepoHost: repository and pull requests', () => {
       base: 'master',
       title: 'feat: x',
       body: 'Closes #7',
+      assignees: [],
     };
 
     expect(await host.openPullRequest(draft)).toEqual({
@@ -369,6 +372,43 @@ describe('GitHubRepoHost: repository and pull requests', () => {
       title: 'feat: x',
       body: 'Closes #7',
     });
+
+    expect(replay.requests).toHaveLength(1);
+  });
+
+  it('assigns the new pull request to the draft\'s assignees', async () => {
+    const {
+      host,
+      replay,
+    } = hostWith([
+      {
+        method: 'POST',
+        path: '/repos/acme/app/pulls',
+        status: 201,
+        body: {
+          number: 16,
+          html_url: 'https://github.com/acme/app/pull/16',
+          head: { sha: 'def5678' },
+        },
+      },
+      {
+        method: 'POST',
+        path: '/repos/acme/app/issues/16/assignees',
+        status: 201,
+        body: {},
+      },
+    ]);
+
+    await host.openPullRequest({
+      repository: 'acme/app',
+      head: 'agent/issue-7',
+      base: 'master',
+      title: 'feat: x',
+      body: 'Closes #7',
+      assignees: ['octocat'],
+    });
+
+    expect(replay.nth(1).body).toEqual({ assignees: ['octocat'] });
   });
 });
 

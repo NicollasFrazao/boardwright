@@ -38,6 +38,7 @@ describe('the implement prompt built from a real base', () => {
           'bug',
         ],
         isOpen: true,
+        assignees: [],
       },
       workspace: {
         repository: 'NicollasFrazao/atena',
