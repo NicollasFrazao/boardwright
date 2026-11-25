@@ -21,7 +21,7 @@ Option 3.
 
 - The conditions (required checks green, zero unresolved threads counted again right before merging,
   the review verdict, a clean feedback loop, a changed-lines limit, a path denylist, opt-in and
-  opt-out labels with `needs-human` always winning) are code with table tests, the same for every
+  opt-out labels with `boardwright:hold` always winning) are code with table tests, the same for every
   provider.
 - Native auto-merge completes only when the ruleset's checks pass, so nothing bypasses the ruleset.
 - A model can veto a merge in `mode: agent`; it can never force one.

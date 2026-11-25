@@ -26,8 +26,8 @@ const PASSING: MergeFacts = {
   headSha: 'abc1234',
   isDraft: false,
   labels: [
-    'agent',
-    'agent-merge',
+    'boardwright:agent',
+    'boardwright:merge',
   ],
   checks: 'passing',
   mergeability: 'mergeable',
@@ -102,7 +102,7 @@ describe('the merge stage', () => {
       key: 'pass',
     });
 
-    expect(audits(world)[0]).toContain('labelled `agent-merge`');
+    expect(audits(world)[0]).toContain('labelled `boardwright:merge`');
     expect(world.board.moves).toEqual([]);
     expect(world.agent.requests).toEqual([]);
   });
@@ -182,7 +182,7 @@ describe('the merge stage', () => {
     ],
     [
       'leaves alone a pull request without the opt-in label',
-      { labels: ['agent'] },
+      { labels: ['boardwright:agent'] },
       'merge-not-opted-in',
     ],
   ] as const)('%s', async (
@@ -277,5 +277,26 @@ describe('the merge stage', () => {
 
     expect(report.hasFailures).toBe(false);
     expect(world.context.selectors).toEqual([]);
+  });
+
+  it('warns about merge labels the repository lacks', async () => {
+    const world = mergeWorld();
+
+    world.repoHost.labels.set(
+      'acme/app',
+      new Set([
+        'boardwright:agent',
+        'boardwright:merge',
+      ]),
+    );
+
+    const report = await diagnose({
+      config: world.dependencies.config,
+      board: world.board,
+      repoHost: world.repoHost,
+      context: world.context,
+    });
+
+    expect(report.checks.filter((check) => check.status === 'warn').map((check) => check.detail)).toEqual(['The merge label "boardwright:hold" does not exist; create it to let a person hold a pull request back.']);
   });
 });

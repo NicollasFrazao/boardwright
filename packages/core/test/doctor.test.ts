@@ -46,7 +46,7 @@ describe('diagnose', () => {
     )).toEqual([
       'board acme#3: "Roadmap", Status: Todo, Ready, In Progress, In review, Done.',
       'acme/app: Reachable; default branch master.',
-      'acme/app: The trigger label "agent" exists.',
+      'acme/app: The trigger label "boardwright:agent" exists.',
       'acme/app implement: dotcontext: playbook .context/agents/feature-developer.md, 1 skills for phase E.',
       'acme/app implement: dotcontext: playbook .context/agents/feature-developer.md, 1 skills for phase E.',
     ]);
@@ -125,7 +125,7 @@ describe('diagnose', () => {
     expect(lines(
       report.checks,
       'warn',
-    )).toEqual(['acme/app: The trigger label "agent" does not exist; create it to release issues to the pipeline.']);
+    )).toEqual(['acme/app: The trigger label "boardwright:agent" does not exist; create it to release issues to the pipeline.']);
   });
 
   it('fails a repository it cannot reach, and goes on', async () => {

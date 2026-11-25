@@ -45,7 +45,7 @@ function factsRoute(overrides: Record<string, unknown>): ReplayRoute {
             additions: 100,
             deletions: 20,
             autoMergeRequest: null,
-            labels: { nodes: [{ name: 'agent-merge' }] },
+            labels: { nodes: [{ name: 'boardwright:merge' }] },
             files: { nodes: [{ path: 'src/a.ts' }] },
             reviewThreads: {
               nodes: [
@@ -89,7 +89,7 @@ describe('GitHubRepoHost.getMergeFacts', () => {
       pullRequestId: 'PR_9',
       headSha: 'abc1234',
       isDraft: false,
-      labels: ['agent-merge'],
+      labels: ['boardwright:merge'],
       checks: 'passing',
       mergeability: 'mergeable',
       unresolvedThreads: 1,

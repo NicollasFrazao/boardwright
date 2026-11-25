@@ -529,7 +529,7 @@ export class MemoryLogger implements Logger {
   }
 }
 
-/** The issue every scenario starts from: open, labelled `agent` by a maintainer. */
+/** The issue every scenario starts from: open, labelled `boardwright:agent` by a maintainer. */
 export const ISSUE: IssueRef = {
   repository: 'acme/app',
   number: 7,
@@ -604,7 +604,7 @@ export function scenario(config: PipelineConfig = baseConfig()): Scenario {
       ref: ISSUE,
       title: 'Add the feature',
       body: 'The app needs the feature.',
-      labels: ['agent'],
+      labels: ['boardwright:agent'],
       isOpen: true,
     },
   );
@@ -619,7 +619,7 @@ export function scenario(config: PipelineConfig = baseConfig()): Scenario {
 
   repoHost.labels.set(
     ISSUE.repository,
-    new Set(['agent']),
+    new Set(['boardwright:agent']),
   );
 
   return {
