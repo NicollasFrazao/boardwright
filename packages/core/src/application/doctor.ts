@@ -196,16 +196,31 @@ async function checkContext(
 }
 
 function requiredStatuses(stages: readonly StageConfig[]): string[] {
-  const statuses = stages.flatMap((stage) => stage.id === 'implement'
-    ? [
+  const statuses = stages.flatMap((stage) => statusesOf(stage));
+
+  return [...new Set(statuses)];
+}
+
+/** The Status options a stage reads or moves cards to. */
+function statusesOf(stage: StageConfig): string[] {
+  switch (stage.id) {
+    case 'implement':
+      return [
         stage.when.status,
         stage.claim.status,
         stage.done.status,
         stage.blocked.status,
-      ]
-    : [stage.when.status]);
-
-  return [...new Set(statuses)];
+      ];
+    case 'refine':
+      return [
+        stage.when.status,
+        stage.done.status,
+        stage.blocked.status,
+      ];
+    case 'review':
+    case 'address-feedback':
+      return [stage.when.status];
+  }
 }
 
 function check(

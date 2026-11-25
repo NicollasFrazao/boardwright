@@ -18,6 +18,10 @@ import {
   hasFeedback,
   runFeedbackStage,
 } from './feedback-stage.ts';
+import {
+  hasPlan,
+  runRefineStage,
+} from './refine-stage.ts';
 import { runReviewStage } from './review-stage.ts';
 
 /** Why a stage does not apply to an item right now. */
@@ -82,7 +86,7 @@ export function handlerFor(
             issue,
           },
         ),
-        statusAfter: (event) => implementStatusAfter(
+        statusAfter: (event) => movingStatusAfter(
           stage,
           event,
         ),
@@ -110,6 +114,28 @@ export function handlerFor(
           },
         ),
         statusAfter: () => undefined,
+      };
+    case 'refine':
+      return {
+        claimStatus: undefined,
+        repairStatus: stage.done.status,
+        giveUpStatus: stage.blocked.status,
+        precondition: () => Promise.resolve(undefined),
+        isResultInPlace: (issue) => hasPlan(
+          dependencies.repoHost,
+          issue,
+        ),
+        run: (issue) => runRefineStage(
+          dependencies,
+          {
+            ...run,
+            issue,
+          },
+        ),
+        statusAfter: (event) => movingStatusAfter(
+          stage,
+          event,
+        ),
       };
     case 'address-feedback':
       return {
@@ -141,9 +167,16 @@ export function handlerFor(
   }
 }
 
-/** Where the implement stage sends a card: forward on success, back on failure, to a person otherwise. */
-function implementStatusAfter(
-  stage: Extract<StageConfig, { id: 'implement' }>,
+/** The Status a card-moving stage reads and sends cards to. */
+interface MovingStage {
+  readonly when: { readonly status: string };
+  readonly done: { readonly status: string };
+  readonly blocked: { readonly status: string };
+}
+
+/** Where a card-moving stage (implement, refine) sends a card: forward on success, back on failure, to a person otherwise. */
+function movingStatusAfter(
+  stage: MovingStage,
   event: RunOutcomeEvent,
 ): string {
   switch (event) {

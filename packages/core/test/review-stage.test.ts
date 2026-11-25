@@ -52,6 +52,7 @@ function reviewWorld(overrides: Record<string, unknown> = {}): Scenario {
       ],
     },
     addressedThreadIds: [],
+    plan: undefined,
   };
 
   return world;
@@ -165,6 +166,7 @@ describe('the review stage', () => {
       ...world.agent.result,
       review: undefined,
       addressedThreadIds: [],
+      plan: undefined,
     };
 
     const failed = await tick(world.dependencies);
@@ -177,6 +179,7 @@ describe('the review stage', () => {
       pullRequest: undefined,
       review: undefined,
       addressedThreadIds: [],
+      plan: undefined,
     };
 
     world.clock.advance(1000);
@@ -222,6 +225,7 @@ describe('the review stage', () => {
       ...world.agent.result,
       review: undefined,
       addressedThreadIds: [],
+      plan: undefined,
     };
 
     await tick(world.dependencies);

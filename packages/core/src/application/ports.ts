@@ -176,8 +176,8 @@ export interface WorkspacePort {
 export interface AgentRequest {
   readonly stage: string;
 
-  /** `change` edits and commits; `review` only reads and reports a verdict. */
-  readonly task: 'change' | 'review';
+  /** `change` edits and commits; `review` reads and reports a verdict; `plan` reads and reports a plan. */
+  readonly task: 'change' | 'review' | 'plan';
   readonly cwd: string;
   readonly prompt: string;
   readonly maxTurns: number;
@@ -204,6 +204,9 @@ export interface AgentResult {
 
   /** For a `change` task on feedback: the ids of the review threads the agent says it addressed. */
   readonly addressedThreadIds: readonly string[];
+
+  /** The plan of a `plan` task, in Markdown. */
+  readonly plan: string | undefined;
 }
 
 /** An agent runtime (Claude first). */
