@@ -219,12 +219,33 @@ interface RecentIssuesQuery {
   } | null;
 }
 
+/** Who else acts on the repository host. */
+export interface GitHubRepoHostOptions {
+  /**
+   * The client that submits reviews, per repository: a GitHub App's installation (ADR 0005), so a review can
+   * approve a pull request that the main token opened. Without it, reviews go out on the main client.
+   */
+  readonly reviewer?: (repository: string) => Promise<GitHubClient>;
+}
+
+const REVIEW_EVENTS = {
+  comment: 'COMMENT',
+  approve: 'APPROVE',
+  'request-changes': 'REQUEST_CHANGES',
+} as const;
+
 /** Issues, comments, labels, files and pull requests through the GitHub REST API. */
 export class GitHubRepoHost implements RepoHostPort {
   private readonly client: GitHubClient;
 
-  constructor(client: GitHubClient) {
+  private readonly reviewer: GitHubRepoHostOptions['reviewer'];
+
+  constructor(
+    client: GitHubClient,
+    options: GitHubRepoHostOptions = {},
+  ) {
     this.client = client;
+    this.reviewer = options.reviewer;
   }
 
   /** The issue's title, body, label names and whether it is open. */
@@ -543,22 +564,25 @@ export class GitHubRepoHost implements RepoHostPort {
   }
 
   /**
-   * Posts a review that only comments, with its line comments.
+   * Posts a review with its line comments, as a comment, an approval or a change request, on the reviewer's
+   * client when there is one.
    *
    * @remarks
    * GitHub rejects the whole review (422) when one comment points at a line outside the diff; the review is
    * then posted again with the comments in its body, so no finding is lost.
    */
   async submitReview(review: ReviewDraft): Promise<void> {
+    const client = this.reviewer === undefined ? this.client : await this.reviewer(review.repository);
+
     const target = {
       ...splitRepository(review.repository),
       pull_number: review.number,
       commit_id: review.headSha,
-      event: 'COMMENT' as const,
+      event: REVIEW_EVENTS[review.event],
     };
 
     try {
-      await this.client.rest.pulls.createReview({
+      await client.rest.pulls.createReview({
         ...target,
         body: review.body,
         comments: review.comments.map((comment) => ({
@@ -576,7 +600,7 @@ export class GitHubRepoHost implements RepoHostPort {
         throw error;
       }
 
-      await this.client.rest.pulls.createReview({
+      await client.rest.pulls.createReview({
         ...target,
         body: [
           review.body,

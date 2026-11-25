@@ -71,8 +71,9 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
   `GITHUB_TOKEN` and `GH_TOKEN`;
 - only the project's settings (`settingSources: ['project']`), not the machine user's;
 - for a review or a plan, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
-  `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments; it
-  never approves.
+  `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments,
+  unless the stage sets `approve`: then the GitHub App (ADR 0005) submits the verdict as an approval or a
+  change request, and the agent's approval stands in for a person's review.
 - for address-feedback, the review comments and check names are fenced as input like the issue, and
   only the core resolves threads: the agent names the ones it addressed, and the core resolves those
   that were in the feedback it read.

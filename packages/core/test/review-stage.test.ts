@@ -103,6 +103,7 @@ describe('the review stage', () => {
     expect(review).toMatchObject({
       number: 9,
       headSha: 'abc1234',
+      event: 'comment',
       comments: [
         {
           path: 'src/feature.ts',
@@ -114,6 +115,41 @@ describe('the review stage', () => {
     expect(world.board.moves).toEqual([]);
     expect(world.workspaces.pushed).toEqual([]);
     expect(world.workspaces.disposed).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      'changes',
+      'request-changes',
+    ],
+    [
+      'approve',
+      'approve',
+    ],
+  ] as const)('submits a %s verdict as %s when the stage approves', async (
+    verdict,
+    event,
+  ) => {
+    const world = reviewWorld({
+      stages: [
+        {
+          id: 'review',
+          approve: true,
+        },
+      ],
+    });
+
+    world.agent.result = {
+      ...world.agent.result,
+      review: {
+        verdict,
+        comments: [],
+      },
+    };
+
+    await tick(world.dependencies);
+
+    expect(world.repoHost.reviews[0]?.event).toBe(event);
   });
 
   it('does not review the same head twice, and reviews again after a new push', async () => {

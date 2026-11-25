@@ -69,6 +69,12 @@ const reviewStage = z.object({
       z.string().min(1),
     ).default({}),
   }).prefault({}),
+
+  /**
+   * Submits the verdict as an approval or a change request instead of a comment, so a ruleset that requires
+   * approving reviews can pass. It needs a GitHub App (ADR 0005): GitHub does not let the author approve.
+   */
+  approve: z.boolean().default(false),
   ...limitsOverride,
 }).strict();
 

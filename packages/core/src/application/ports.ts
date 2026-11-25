@@ -128,6 +128,9 @@ export interface ReviewDraft {
   readonly headSha: string;
   readonly body: string;
   readonly comments: readonly ReviewComment[];
+
+  /** How the review is submitted: a comment, or, when the stage approves, an approval or a change request. */
+  readonly event: 'comment' | 'approve' | 'request-changes';
 }
 
 /** What the pipeline asks the repository host to open. */

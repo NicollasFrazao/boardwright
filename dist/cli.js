@@ -27316,6 +27316,11 @@ var reviewStage = external_exports.object({
       external_exports.string().min(1)
     ).default({})
   }).prefault({}),
+  /**
+   * Submits the verdict as an approval or a change request instead of a comment, so a ruleset that requires
+   * approving reviews can pass. It needs a GitHub App (ADR 0005): GitHub does not let the author approve.
+   */
+  approve: external_exports.boolean().default(false),
   ...limitsOverride
 }).strict();
 var addressFeedbackStage = external_exports.object({
@@ -28812,7 +28817,8 @@ async function runReviewStage(dependencies, run3) {
       repository,
       {
         ...result.review,
-        summary: result.summary
+        summary: result.summary,
+        isApproving: run3.stage.id === "review" && run3.stage.approve
       }
     );
     return outcome5(
@@ -28836,8 +28842,15 @@ async function postReview(dependencies, pullRequest, repository, review) {
 **boardwright review** \xB7 ${heading}
 
 ${review.summary}`,
-    comments: review.comments
+    comments: review.comments,
+    event: reviewEvent(review)
   });
+}
+function reviewEvent(review) {
+  if (!review.isApproving) {
+    return "comment";
+  }
+  return review.verdict === "approve" ? "approve" : "request-changes";
 }
 function outcome5(event, detail) {
   return {
@@ -34920,10 +34933,17 @@ var RECENT_ISSUES_QUERY = `query($owner: String!, $name: String!, $after: String
     }
   }
 }`;
+var REVIEW_EVENTS = {
+  comment: "COMMENT",
+  approve: "APPROVE",
+  "request-changes": "REQUEST_CHANGES"
+};
 var GitHubRepoHost = class {
   client;
-  constructor(client) {
+  reviewer;
+  constructor(client, options = {}) {
     this.client = client;
+    this.reviewer = options.reviewer;
   }
   /** The issue's title, body, label names and whether it is open. */
   async getIssue(ref) {
@@ -35174,21 +35194,23 @@ var GitHubRepoHost = class {
     return reviews.some((review) => review.commit_id === headSha && parseReviewMarker(review.body)?.headSha === headSha);
   }
   /**
-   * Posts a review that only comments, with its line comments.
+   * Posts a review with its line comments, as a comment, an approval or a change request, on the reviewer's
+   * client when there is one.
    *
    * @remarks
    * GitHub rejects the whole review (422) when one comment points at a line outside the diff; the review is
    * then posted again with the comments in its body, so no finding is lost.
    */
   async submitReview(review) {
+    const client = this.reviewer === void 0 ? this.client : await this.reviewer(review.repository);
     const target = {
       ...splitRepository(review.repository),
       pull_number: review.number,
       commit_id: review.headSha,
-      event: "COMMENT"
+      event: REVIEW_EVENTS[review.event]
     };
     try {
-      await this.client.rest.pulls.createReview({
+      await client.rest.pulls.createReview({
         ...target,
         body: review.body,
         comments: review.comments.map((comment) => ({
@@ -35202,7 +35224,7 @@ var GitHubRepoHost = class {
       if (!isUnprocessable(error62) || review.comments.length === 0) {
         throw error62;
       }
-      await this.client.rest.pulls.createReview({
+      await client.rest.pulls.createReview({
         ...target,
         body: [
           review.body,
@@ -36143,11 +36165,17 @@ async function run2(environment, options) {
 }
 function tickDependencies(environment, config2, isDryRun) {
   const token = tokenFrom(environment);
+  const app = appCredentials(environment);
+  checkApprovingReview(
+    config2,
+    app
+  );
   return {
     config: config2,
     ...environment.connect(
       config2,
-      token
+      token,
+      app
     ),
     ...isDryRun ? dryRunAdapters() : environment.connectAgents(
       config2,
@@ -36155,7 +36183,8 @@ function tickDependencies(environment, config2, isDryRun) {
     ),
     merger: isDryRun ? dryRunMerger() : mergerFor(
       environment,
-      config2
+      config2,
+      app
     ),
     context: new RepositoryContextProvider(),
     clock: { now: () => /* @__PURE__ */ new Date() },
@@ -36222,10 +36251,9 @@ function dryRunAdapters() {
 function dryRunMerger() {
   return { merge: () => Promise.reject(new Error("A dry run never acts.")) };
 }
-function mergerFor(environment, config2) {
-  const credentials = appCredentials(environment);
-  if (credentials !== void 0) {
-    return environment.connectAppMerger(credentials);
+function mergerFor(environment, config2, app) {
+  if (app !== void 0) {
+    return environment.connectAppMerger(app);
   }
   const token = environment.variables.BOARDWRIGHT_MERGE_TOKEN;
   if (token === void 0 || token === "") {
@@ -36235,6 +36263,11 @@ function mergerFor(environment, config2) {
     return { merge: () => Promise.reject(new Error("No merge stage is configured.")) };
   }
   return environment.connectMerger(token);
+}
+function checkApprovingReview(config2, app) {
+  if (app === void 0 && config2.stages.some((stage2) => stage2.id === "review" && stage2.approve)) {
+    throw new UsageError("The review stage approves only as a GitHub App: set BOARDWRIGHT_APP_ID with its key, or drop `approve`.");
+  }
 }
 function appCredentials(environment) {
   const {
@@ -36313,6 +36346,18 @@ function cacheDirectory() {
     "boardwright"
   );
 }
+var tokensByApp = /* @__PURE__ */ new WeakMap();
+function appTokens(credentials) {
+  let tokens = tokensByApp.get(credentials);
+  if (tokens === void 0) {
+    tokens = new GitHubAppTokens(credentials);
+    tokensByApp.set(
+      credentials,
+      tokens
+    );
+  }
+  return tokens;
+}
 var shutdown = new AbortController();
 for (const signal of [
   "SIGINT",
@@ -36376,14 +36421,17 @@ process.exitCode = await runProgram(
       process.stderr.write(`${text}
 `);
     },
-    connect: (config2, token) => {
+    connect: (config2, token, app) => {
       const client = createGitHubClient({ token });
       return {
         board: new ProjectBoard(
           client,
           config2.project
         ),
-        repoHost: new GitHubRepoHost(client)
+        repoHost: new GitHubRepoHost(
+          client,
+          app === void 0 ? {} : { reviewer: (repository) => appTokens(app).clientFor(repository) }
+        )
       };
     },
     shutdownSignal: () => shutdown.signal,
@@ -36394,7 +36442,7 @@ process.exitCode = await runProgram(
       `${name}.lock`
     )),
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
-    connectAppMerger: (credentials) => appMerger(new GitHubAppTokens(credentials)),
+    connectAppMerger: (credentials) => appMerger(appTokens(credentials)),
     connectAgents: (config2, token) => ({
       workspaces: new GitWorkspaces({
         directory: cacheDirectory(),

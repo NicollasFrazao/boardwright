@@ -13,7 +13,10 @@ export {
   ProjectBoard,
   type ProjectLocation,
 } from './project-board.ts';
-export { GitHubRepoHost } from './repo-host.ts';
+export {
+  GitHubRepoHost,
+  type GitHubRepoHostOptions,
+} from './repo-host.ts';
 export {
   appMerger,
   GitHubMerger,

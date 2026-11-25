@@ -53,7 +53,8 @@ export interface ProgramEnvironment {
   stderr(text: string): void;
 
   /** The adapters that read and write the board and the repositories. */
-  connect(config: PipelineConfig, token: string): GitHubAdapters;
+  /** The board and the repository host; with a GitHub App, the host submits reviews as the App (ADR 0005). */
+  connect(config: PipelineConfig, token: string, app?: AppCredentials): GitHubAdapters;
 
   /** The adapters that act: the workspaces and the agent. Only `once` without `--dry-run` asks for them. */
   connectAgents(config: PipelineConfig, token: string): AgentAdapters;
@@ -421,12 +422,19 @@ function tickDependencies(
   isDryRun: boolean,
 ): TickDependencies {
   const token = tokenFrom(environment);
+  const app = appCredentials(environment);
+
+  checkApprovingReview(
+    config,
+    app,
+  );
 
   return {
     config,
     ...environment.connect(
       config,
       token,
+      app,
     ),
     ...isDryRun ? dryRunAdapters() : environment.connectAgents(
       config,
@@ -435,6 +443,7 @@ function tickDependencies(
     merger: isDryRun ? dryRunMerger() : mergerFor(
       environment,
       config,
+      app,
     ),
     context: new RepositoryContextProvider(),
     clock: { now: () => new Date() },
@@ -553,11 +562,10 @@ function dryRunMerger(): MergerPort {
 function mergerFor(
   environment: ProgramEnvironment,
   config: PipelineConfig,
+  app: AppCredentials | undefined,
 ): MergerPort {
-  const credentials = appCredentials(environment);
-
-  if (credentials !== undefined) {
-    return environment.connectAppMerger(credentials);
+  if (app !== undefined) {
+    return environment.connectAppMerger(app);
   }
 
   const token = environment.variables.BOARDWRIGHT_MERGE_TOKEN;
@@ -574,6 +582,24 @@ function mergerFor(
   }
 
   return environment.connectMerger(token);
+}
+
+/**
+ * A review stage that approves needs the GitHub App: GitHub does not let the token that opened the pull
+ * request approve it.
+ *
+ * @throws {@link UsageError} when the config has an approving review stage and no App.
+ */
+function checkApprovingReview(
+  config: PipelineConfig,
+  app: AppCredentials | undefined,
+): void {
+  if (
+    app === undefined
+    && config.stages.some((stage) => stage.id === 'review' && stage.approve)
+  ) {
+    throw new UsageError('The review stage approves only as a GitHub App: set BOARDWRIGHT_APP_ID with its key, or drop `approve`.');
+  }
 }
 
 /**
