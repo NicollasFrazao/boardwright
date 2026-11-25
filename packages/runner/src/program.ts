@@ -7,6 +7,7 @@ import {
   type AgentProvider,
   type BoardPort,
   type Logger,
+  type MergerPort,
   type PipelineConfig,
   type RepoHostPort,
   type TickDependencies,
@@ -46,6 +47,9 @@ export interface ProgramEnvironment {
 
   /** The adapters that act: the workspaces and the agent. Only `once` without `--dry-run` asks for them. */
   connectAgents(config: PipelineConfig, token: string): AgentAdapters;
+
+  /** The merger, on its own token. Only `once` without `--dry-run` with a merge stage asks for it. */
+  connectMerger(token: string): MergerPort;
 }
 
 interface GitHubAdapters {
@@ -241,11 +245,17 @@ async function once(
     token,
   );
 
+  const merger = options.isDryRun ? dryRunMerger() : mergerFor(
+    environment,
+    config,
+  );
+
   const report = await tick(
     {
       config,
       ...github,
       ...acting,
+      merger,
       context: new RepositoryContextProvider(),
       clock: { now: () => new Date() },
       runIds: { next: () => randomUUID() },
@@ -359,6 +369,37 @@ function dryRunAdapters(): AgentAdapters {
     },
     agent: { run: unavailable },
   };
+}
+
+/** A dry run's merger: a dry run never merges. */
+function dryRunMerger(): MergerPort {
+  return { merge: () => Promise.reject(new Error('A dry run never acts.')) };
+}
+
+/**
+ * The merger for a config with a merge stage, on `BOARDWRIGHT_MERGE_TOKEN`.
+ *
+ * @throws {@link UsageError} when the config has a merge stage and the token is missing: the identity that
+ * merges must not be the one that opened the pull request.
+ */
+function mergerFor(
+  environment: ProgramEnvironment,
+  config: PipelineConfig,
+): MergerPort {
+  const token = environment.variables.BOARDWRIGHT_MERGE_TOKEN;
+
+  if (
+    token === undefined
+    || token === ''
+  ) {
+    if (config.stages.some((stage) => stage.id === 'merge')) {
+      throw new UsageError('The merge stage needs BOARDWRIGHT_MERGE_TOKEN, a token other than the one that opens pull requests.');
+    }
+
+    return { merge: () => Promise.reject(new Error('No merge stage is configured.')) };
+  }
+
+  return environment.connectMerger(token);
 }
 
 function silentLogger(): Logger {

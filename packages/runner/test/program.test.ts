@@ -67,6 +67,7 @@ function environment(
     },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
+    connectMerger: () => world.merger,
     connectAgents: () => ({
       workspaces: world.workspaces,
       agent: world.agent,
@@ -483,5 +484,60 @@ describe('boardwright help', () => {
       ],
       environment(world),
     )).rejects.toThrow('boom');
+  });
+});
+
+describe('boardwright once with a merge stage', () => {
+  const MERGE_CONFIG = `${CONFIG}  - id: merge\n`;
+
+  it('refuses to act without a merge token of its own', async () => {
+    const env = environment();
+
+    env.files.set(
+      'pipeline.config.yml',
+      MERGE_CONFIG,
+    );
+
+    expect(await runProgram(
+      ['once'],
+      env,
+    )).toBe(EXIT.usage);
+
+    expect(env.err[0]).toContain('BOARDWRIGHT_MERGE_TOKEN');
+  });
+
+  it('runs with the merge token, and plans without one in a dry run', async () => {
+    const env = environment(
+      scenario(),
+      {
+        GITHUB_TOKEN: 'secret',
+        BOARDWRIGHT_MERGE_TOKEN: 'merge-secret',
+      },
+    );
+
+    env.files.set(
+      'pipeline.config.yml',
+      MERGE_CONFIG,
+    );
+
+    expect(await runProgram(
+      ['once'],
+      env,
+    )).toBe(EXIT.ok);
+
+    const dry = environment();
+
+    dry.files.set(
+      'pipeline.config.yml',
+      MERGE_CONFIG,
+    );
+
+    expect(await runProgram(
+      [
+        'once',
+        '--dry-run',
+      ],
+      dry,
+    )).toBe(EXIT.ok);
   });
 });
