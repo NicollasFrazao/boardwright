@@ -38,8 +38,18 @@ const PASSING: MergeFacts = {
   isAutoMergeEnabled: false,
 };
 
-function mergeWorld(facts: Partial<MergeFacts> = {}): Scenario {
-  const world = scenario(baseConfig({ stages: [{ id: 'merge' }] }));
+function mergeWorld(
+  facts: Partial<MergeFacts> = {},
+  stage: Record<string, unknown> = {},
+): Scenario {
+  const world = scenario(baseConfig({
+    stages: [
+      {
+        id: 'merge',
+        ...stage,
+      },
+    ],
+  }));
 
   world.board.items[0] = {
     itemId: 'item-7',
@@ -277,5 +287,169 @@ describe('the merge stage', () => {
 
     expect(report.hasFailures).toBe(false);
     expect(world.context.selectors).toEqual([]);
+  });
+});
+
+describe('the merge gatekeeper (mode: agent)', () => {
+  function gatekeeperWorld(
+    verdict: 'approve' | 'changes',
+    facts: Partial<MergeFacts> = {},
+  ): Scenario {
+    const world = mergeWorld(
+      facts,
+      { mode: 'agent' },
+    );
+
+    world.agent.result = {
+      status: 'completed',
+      summary: verdict === 'approve' ? 'Nothing risky.' : 'It drops a column the API still reads.',
+      pullRequest: undefined,
+      review: {
+        verdict,
+        comments: [],
+      },
+      addressedThreadIds: [],
+      plan: undefined,
+    };
+
+    return world;
+  }
+
+  it('merges after the gatekeeper approves, asking it read-only with the security playbook', async () => {
+    const world = gatekeeperWorld('approve');
+    const report = await tick(world.dependencies);
+
+    expect(report.entries[0]?.result).toMatchObject({ outcome: { detail: 'Merged https://github.com/acme/app/pull/9.' } });
+
+    expect(world.agent.requests[0]).toMatchObject({
+      stage: 'merge',
+      task: 'review',
+    });
+
+    expect(world.agent.requests[0]?.prompt).toContain('You are the last check before boardwright merges pull request #9');
+
+    expect(world.context.selectors).toEqual([
+      {
+        phase: 'V',
+        agent: 'security-auditor',
+      },
+    ]);
+
+    expect(world.merger.requests).toHaveLength(1);
+    expect(world.workspaces.disposed).toHaveLength(1);
+  });
+
+  it('does not merge after a veto, says why once, and does not ask again for the same head', async () => {
+    const world = gatekeeperWorld('changes');
+    const report = await tick(world.dependencies);
+
+    expect(report.entries[0]?.result).toMatchObject({ outcome: { detail: 'The gatekeeper vetoed merging https://github.com/acme/app/pull/9.' } });
+    expect(world.merger.requests).toEqual([]);
+    expect(audits(world)).toHaveLength(1);
+    expect(audits(world)[0]).toContain('It drops a column the API still reads.');
+
+    expect(parseMergeMarker(audits(world)[0] ?? '')).toMatchObject({
+      decision: 'blocked',
+      key: 'gatekeeper-veto',
+    });
+
+    expect((await tick(world.dependencies)).entries[0]?.action).toEqual({
+      kind: 'skip',
+      reason: 'up-to-date',
+    });
+
+    expect(world.agent.requests).toHaveLength(1);
+  });
+
+  it('is never asked when the policy blocks: an approval cannot override a failed condition', async () => {
+    const world = gatekeeperWorld(
+      'approve',
+      { changedPaths: ['.github/workflows/ci.yml'] },
+    );
+
+    await tick(world.dependencies);
+
+    expect(world.agent.requests).toEqual([]);
+    expect(world.merger.requests).toEqual([]);
+  });
+
+  it.each([
+    [
+      'blocked',
+      {
+        status: 'blocked',
+        summary: 'Cannot read the diff.',
+        review: undefined,
+      },
+      'blocked',
+    ],
+    [
+      'without a verdict',
+      {
+        status: 'completed',
+        summary: 'Done.',
+        review: undefined,
+      },
+      'failed',
+    ],
+  ] as const)('merges nothing when the gatekeeper ends %s', async (
+    _case,
+    result,
+    event,
+  ) => {
+    const world = gatekeeperWorld('approve');
+
+    world.agent.result = {
+      ...world.agent.result,
+      ...result,
+    };
+
+    const report = await tick(world.dependencies);
+
+    expect(report.entries[0]?.result).toMatchObject({ outcome: { event } });
+    expect(world.merger.requests).toEqual([]);
+    expect(audits(world)).toEqual([]);
+  });
+
+  it('merges nothing when the pull request changed while the gatekeeper ran', async () => {
+    const world = gatekeeperWorld('approve');
+    const run = world.agent.run.bind(world.agent);
+
+    world.agent.run = async (request) => {
+      const result = await run(request);
+
+      world.repoHost.mergeFacts.set(
+        9,
+        {
+          ...PASSING,
+          headSha: 'def5678',
+        },
+      );
+
+      return result;
+    };
+
+    const report = await tick(world.dependencies);
+
+    expect(report.entries[0]?.result).toMatchObject({ outcome: { detail: 'https://github.com/acme/app/pull/9 changed while the gatekeeper ran; nothing was merged.' } });
+    expect(world.merger.requests).toEqual([]);
+  });
+
+  it('has doctor check the gatekeeper playbook', async () => {
+    const world = gatekeeperWorld('approve');
+
+    await diagnose({
+      config: world.dependencies.config,
+      board: world.board,
+      repoHost: world.repoHost,
+      context: world.context,
+    });
+
+    expect(world.context.selectors).toEqual([
+      {
+        phase: 'V',
+        agent: 'security-auditor',
+      },
+    ]);
   });
 });

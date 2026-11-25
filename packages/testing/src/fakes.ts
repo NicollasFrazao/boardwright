@@ -1,6 +1,6 @@
 import type {
   AgentProvider,
-  AgentStageConfig,
+  StageConfig,
   AgentRequest,
   AgentResult,
   BoardDescription,
@@ -538,9 +538,9 @@ export const ISSUE: IssueRef = {
 /**
  * The first stage of a config.
  *
- * @throws {@link Error} when the config's first stage is missing or runs no agent, which fails the test.
+ * @throws {@link Error} when the config has no stage, which fails the test.
  */
-export function firstStage(config: PipelineConfig): AgentStageConfig {
+export function firstStage(config: PipelineConfig): StageConfig {
   const [stage] = config.stages;
 
   if (

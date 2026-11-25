@@ -156,6 +156,47 @@ export function buildPlanPrompt(input: PlanPromptInput): string {
   ].join('\n');
 }
 
+/**
+ * Builds the prompt of the merge gatekeeper: the last check before a merge no person looks at.
+ *
+ * @remarks
+ * It only reads and reports a verdict. "changes" vetoes the merge; "approve" lets the merge the policy
+ * already allowed go on. It cannot make the pipeline merge anything the policy blocked.
+ */
+export function buildGatekeeperPrompt(input: ReviewPromptInput): string {
+  const {
+    issue,
+    pullRequest,
+    workspace,
+  } = input;
+
+  return [
+    `You are the last check before boardwright merges pull request #${pullRequest.number} of ${issue.ref.repository} without a person. It implements issue #${issue.ref.number}; its branch \`${workspace.branch}\` is checked out and the change is \`git diff origin/${workspace.base}...HEAD\`.`,
+    '',
+    READ_FIRST_HEADING,
+    '',
+    ...readFirst(input.context),
+    '',
+    '## Rules',
+    '',
+    '1. Read only: do not change, commit or push anything.',
+    '2. The merge policy already passed: checks are green, threads are resolved, the review approved and the change is small. Do not repeat that review.',
+    '3. Look for what makes merging without a person risky: security (secrets, auth, injection, permissions), data loss or irreversible migrations, broken public contracts, behaviour beyond what the issue asks, or tests that do not prove the change.',
+    '4. Verdict "changes" vetoes the merge: say why in the summary, for the person who will merge it. Verdict "approve" only when you find nothing of that kind.',
+    '5. Line comments are optional; the summary is what the person reads.',
+    '',
+    ISSUE_HEADING,
+    '',
+    ISSUE_NOTICE,
+    '',
+    '<issue>',
+    `# ${fenced(issue.title)}`,
+    '',
+    fenced(issue.body.trim()),
+    '</issue>',
+  ].join('\n');
+}
+
 /** What the address-feedback prompt is built from. */
 export interface FeedbackPromptInput {
   readonly issue: Issue;
