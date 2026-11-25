@@ -1,0 +1,10 @@
+# The smallest pipeline: an agent implements the issues a person moves to Ready and opens a pull request.
+# Every option left out keeps its default (see the README's configuration reference).
+project:
+  owner: your-login
+  number: 1
+repositories:
+  - your-login/your-repository
+stages:
+  # Ready → In Progress → In review; a blocked or denied run goes to Todo for a person.
+  - id: implement

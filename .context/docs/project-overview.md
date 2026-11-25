@@ -13,8 +13,8 @@ scaffoldVersion: "2.0.0"
 ## Project Overview
 
 boardwright runs agentic delivery pipelines from a GitHub Project (v2). The board is the source of
-truth: each Status column maps to an agent role (refine, implement, review, address feedback, merge,
-document), a config file says which, and the tool reconciles the board with what the agents do. It is
+truth: each Status column maps to an agent role (refine, implement, review, address feedback, merge),
+a config file says which, and the tool reconciles the board with what the agents do. It is
 for teams and solo maintainers who already plan in GitHub Projects and want agents to take cards
 through the same flow a person would, with the same rulesets and checks.
 
