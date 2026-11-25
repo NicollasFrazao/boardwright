@@ -38,7 +38,7 @@ laptop and in GitHub Actions.
 | `packages/github` | Infrastructure | `BoardPort` on a Projects v2 board of a user or an organization (GraphQL); `RepoHostPort` on the REST API: issues, comments, the labeller from the issue's events, pull requests, labels, files | #4 |
 | `packages/git` | Infrastructure | `WorkspacePort` on the git CLI: a cached clone per repository, a worktree per run, push without force | #5 |
 | `packages/agent-claude` | Infrastructure | `AgentProvider` on the Claude Agent SDK: a closed tool list, a `PreToolUse` guard, a token-free environment, a structured report | #5 |
-| `packages/runner` | Interface | CLI: `doctor`, `once --dry-run`, `init` (#4); `once` with agents (#5) and the daemon `run` (#8) | #4, #5, #8 |
+| `packages/runner` | Interface | CLI: `doctor`, `once` (with `--dry-run`), `init`, and the daemon `run`: ticks on an interval with exponential backoff while ticks fail (up to 15 minutes), stops after the current tick on SIGINT/SIGTERM, and holds a lock file per board so a second runner on the machine refuses to start | #4, #5, #8 |
 | `packages/testing` | (tests only) | Fakes of every port and a replay of the GitHub API; no `src` may import it | #4 |
 | `action/` | Interface | GitHub Action: one `tick()` per event | #8 |
 

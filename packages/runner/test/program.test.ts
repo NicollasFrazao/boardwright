@@ -23,6 +23,9 @@ stages:
   - id: implement
 `;
 
+/** Locks held by test runners, across environments, as on one machine. */
+const locks = new Set<string>();
+
 interface TestEnvironment extends ProgramEnvironment {
   readonly files: Map<string, string>;
   readonly out: string[];
@@ -34,6 +37,8 @@ function environment(
   world: Scenario = scenario(),
   variables: Record<string, string | undefined> = { GITHUB_TOKEN: 'secret' },
 ): TestEnvironment {
+  const shutdown = new AbortController();
+
   const files = new Map([[
     'pipeline.config.yml',
     CONFIG,
@@ -68,6 +73,25 @@ function environment(
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     connectMerger: () => world.merger,
+    shutdownSignal: () => shutdown.signal,
+    sleep: () => {
+      shutdown.abort();
+
+      return Promise.resolve();
+    },
+    acquireLock: (name) => {
+      if (locks.has(name)) {
+        return Promise.resolve(undefined);
+      }
+
+      locks.add(name);
+
+      return Promise.resolve(() => {
+        locks.delete(name);
+
+        return Promise.resolve();
+      });
+    },
     connectAgents: () => ({
       workspaces: world.workspaces,
       agent: world.agent,
@@ -539,5 +563,63 @@ describe('boardwright once with a merge stage', () => {
       ],
       dry,
     )).toBe(EXIT.ok);
+  });
+});
+
+describe('boardwright run', () => {
+  it('runs ticks until shutdown, logs a line per tick and releases its lock', async () => {
+    const env = environment();
+
+    expect(await runProgram(
+      [
+        'run',
+        '--interval',
+        '30',
+      ],
+      env,
+    )).toBe(EXIT.ok);
+
+    expect(env.err.map((line) => (JSON.parse(line) as { event: string }).event)).toEqual([
+      'tick.item',
+      'daemon.tick',
+      'daemon.stopped',
+    ]);
+
+    expect(locks.size).toBe(0);
+  });
+
+  it('refuses to start while another runner holds the lock for the board', async () => {
+    locks.add('acme-3');
+
+    try {
+      const env = environment();
+
+      expect(await runProgram(
+        ['run'],
+        env,
+      )).toBe(EXIT.usage);
+
+      expect(env.err[0]).toBe('Another boardwright runner already works on acme#3 on this machine.');
+    } finally {
+      locks.delete('acme-3');
+    }
+  });
+
+  it.each([
+    ['5'],
+    ['ten'],
+  ])('rejects --interval %s', async (interval) => {
+    const env = environment();
+
+    expect(await runProgram(
+      [
+        'run',
+        '--interval',
+        interval,
+      ],
+      env,
+    )).toBe(EXIT.usage);
+
+    expect(env.err[0]).toContain('--interval needs a whole number of seconds');
   });
 });

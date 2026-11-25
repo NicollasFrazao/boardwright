@@ -23,6 +23,7 @@ import {
   formatDoctor,
   formatTick,
 } from './format.ts';
+import { runDaemon } from './daemon.ts';
 import { repositoryFiles } from './repository-files.ts';
 
 /** Exit codes: success, checks or runs that failed, and a command that could not run. */
@@ -48,6 +49,15 @@ export interface ProgramEnvironment {
   /** The adapters that act: the workspaces and the agent. Only `once` without `--dry-run` asks for them. */
   connectAgents(config: PipelineConfig, token: string): AgentAdapters;
 
+  /** Aborted on SIGINT or SIGTERM. */
+  shutdownSignal(): AbortSignal;
+
+  /** Waits, ending early when the signal aborts. */
+  sleep(ms: number, signal: AbortSignal): Promise<void>;
+
+  /** Takes a machine-wide lock; resolves its release, or `undefined` when another process holds it. */
+  acquireLock(name: string): Promise<(() => Promise<void>) | undefined>;
+
   /** The merger, on its own token. Only `once` without `--dry-run` with a merge stage asks for it. */
   connectMerger(token: string): MergerPort;
 }
@@ -68,6 +78,13 @@ const TOKEN_VARIABLES = [
   'GH_TOKEN',
 ];
 
+const MS_PER_SECOND = 1000;
+const DEFAULT_INTERVAL_SECONDS = 60;
+const MIN_INTERVAL_SECONDS = 10;
+
+/** The longest wait between failing ticks: 15 minutes. */
+const MAX_BACKOFF_MS = 900_000;
+
 /** The help text. */
 export const USAGE = `Usage: boardwright <command> [options]
 
@@ -75,6 +92,7 @@ Commands:
   doctor            Check the config against the board and the repositories. Changes nothing.
   once              Run one tick: claim the items that are due, run their stage, record the outcome.
   once --dry-run    Print what one tick would do. Changes nothing.
+  run               Run ticks until SIGINT or SIGTERM: --interval <seconds> (default ${DEFAULT_INTERVAL_SECONDS}, at least ${MIN_INTERVAL_SECONDS}).
   init              Write a starter ${DEFAULT_CONFIG_PATH}: --owner <login> --project <number> --repository <owner/name>...
 
 Options:
@@ -88,6 +106,28 @@ repositories' contents, issues and pull requests. The agent authenticates throug
 documented methods, such as ANTHROPIC_API_KEY; boardwright never handles those credentials.`;
 
 class UsageError extends Error {}
+
+/**
+ * The tick interval from `--interval`.
+ *
+ * @throws {@link UsageError} when it is not a whole number of seconds of at least the minimum.
+ */
+function intervalFrom(value: unknown): number {
+  if (value === undefined) {
+    return DEFAULT_INTERVAL_SECONDS;
+  }
+
+  const seconds = Number(value);
+
+  if (
+    !Number.isInteger(seconds)
+    || seconds < MIN_INTERVAL_SECONDS
+  ) {
+    throw new UsageError(`--interval needs a whole number of seconds, at least ${MIN_INTERVAL_SECONDS}.`);
+  }
+
+  return seconds;
+}
 
 /**
  * Runs one command and returns its exit code.
@@ -134,6 +174,7 @@ async function dispatch(
       json: { type: 'boolean' },
       help: { type: 'boolean' },
       'dry-run': { type: 'boolean' },
+      interval: { type: 'string' },
       owner: { type: 'string' },
       project: { type: 'string' },
       repository: {
@@ -173,6 +214,14 @@ async function dispatch(
         {
           ...options,
           isDryRun: values['dry-run'] === true,
+        },
+      );
+    case 'run':
+      return run(
+        environment,
+        {
+          ...options,
+          intervalSeconds: intervalFrom(values.interval),
         },
       );
     case 'init':
@@ -233,34 +282,12 @@ async function once(
     options.configPath,
   );
 
-  const token = tokenFrom(environment);
-
-  const github = environment.connect(
-    config,
-    token,
-  );
-
-  const acting = options.isDryRun ? dryRunAdapters() : environment.connectAgents(
-    config,
-    token,
-  );
-
-  const merger = options.isDryRun ? dryRunMerger() : mergerFor(
-    environment,
-    config,
-  );
-
   const report = await tick(
-    {
+    tickDependencies(
+      environment,
       config,
-      ...github,
-      ...acting,
-      merger,
-      context: new RepositoryContextProvider(),
-      clock: { now: () => new Date() },
-      runIds: { next: () => randomUUID() },
-      logger: options.isDryRun ? silentLogger() : jsonLogger(environment),
-    } satisfies TickDependencies,
+      options.isDryRun,
+    ),
     { dryRun: options.isDryRun },
   );
 
@@ -274,6 +301,81 @@ async function once(
   ));
 
   return report.entries.some((entry) => entry.result?.kind === 'error') ? EXIT.failed : EXIT.ok;
+}
+
+/**
+ * Runs ticks until SIGINT or SIGTERM, holding a lock so a second runner for the same board on this machine
+ * refuses to start.
+ */
+async function run(
+  environment: ProgramEnvironment,
+  options: CommonOptions & { readonly intervalSeconds: number },
+): Promise<number> {
+  const config = await loadConfig(
+    environment,
+    options.configPath,
+  );
+
+  const dependencies = tickDependencies(
+    environment,
+    config,
+    false,
+  );
+
+  const release = await environment.acquireLock(`${config.project.owner}-${config.project.number}`);
+
+  if (release === undefined) {
+    throw new UsageError(`Another boardwright runner already works on ${config.project.owner}#${config.project.number} on this machine.`);
+  }
+
+  try {
+    await runDaemon({
+      intervalMs: options.intervalSeconds * MS_PER_SECOND,
+      maxBackoffMs: MAX_BACKOFF_MS,
+      signal: environment.shutdownSignal(),
+      tick: () => tick(dependencies),
+      sleep: (
+        ms,
+        signal,
+      ) => environment.sleep(
+        ms,
+        signal,
+      ),
+      logger: dependencies.logger,
+    });
+  } finally {
+    await release();
+  }
+
+  return EXIT.ok;
+}
+
+function tickDependencies(
+  environment: ProgramEnvironment,
+  config: PipelineConfig,
+  isDryRun: boolean,
+): TickDependencies {
+  const token = tokenFrom(environment);
+
+  return {
+    config,
+    ...environment.connect(
+      config,
+      token,
+    ),
+    ...isDryRun ? dryRunAdapters() : environment.connectAgents(
+      config,
+      token,
+    ),
+    merger: isDryRun ? dryRunMerger() : mergerFor(
+      environment,
+      config,
+    ),
+    context: new RepositoryContextProvider(),
+    clock: { now: () => new Date() },
+    runIds: { next: () => randomUUID() },
+    logger: isDryRun ? silentLogger() : jsonLogger(environment),
+  };
 }
 
 async function init(
