@@ -1,3 +1,4 @@
+import { isAllowedRepository } from '../domain/guard-rails.ts';
 import {
   inferFieldValue,
   issuesNotOnBoard,
@@ -74,7 +75,9 @@ interface Pass {
 
 /**
  * Tidies the board before the stages run: adds new issues, fills inferred fields, moves parents whose
- * sub-issues started. Each part runs only when the config turns it on.
+ * sub-issues started. Each part runs only when the config turns it on, and only changes items of the
+ * allowlisted repositories; the other items of the board are read (a parent, a value to count), never
+ * changed.
  *
  * @remarks
  * Every change is safe to repeat: an issue already on the board is not added again (the board also
@@ -214,11 +217,14 @@ async function inferField(
     index,
     item,
   ] of pass.items.entries()) {
-    const value = item.fields[field] === undefined ? inferFieldValue(
-      pass.items,
-      item,
-      field,
-    ) : undefined;
+    const value = item.fields[field] === undefined && isAllowed(
+      pass,
+      item.issue,
+    ) ? inferFieldValue(
+          pass.items,
+          item,
+          field,
+        ) : undefined;
 
     if (value === undefined) {
       continue;
@@ -264,7 +270,10 @@ async function startParents(pass: Pass): Promise<void> {
   } of parentsToStart(
       pass.items,
       rule,
-    )) {
+    ).filter((candidate) => isAllowed(
+      pass,
+      candidate.parent.issue,
+    ))) {
     await record(
       pass,
       {
@@ -279,6 +288,17 @@ async function startParents(pass: Pass): Promise<void> {
       ),
     );
   }
+}
+
+/** Hygiene changes only the items of the allowlisted repositories, like every stage. */
+function isAllowed(
+  pass: Pass,
+  issue: IssueRef,
+): boolean {
+  return isAllowedRepository(
+    issue.repository,
+    pass.dependencies.config.repositories,
+  );
 }
 
 /** Carries out an action unless it is a dry run, and records it; resolves whether it was applied. */

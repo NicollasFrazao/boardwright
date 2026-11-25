@@ -604,4 +604,46 @@ describe('tick: board hygiene', () => {
       event: 'board.error',
     }));
   });
+
+  it('changes only items of the allowlisted repositories', async () => {
+    const world = hygieneWorld({
+      inferFields: ['Track'],
+      followSubIssues: true,
+    });
+
+    const other = (number: number): {
+      repository: string;
+      number: number;
+    } => ({
+      repository: 'someone/else',
+      number,
+    });
+
+    world.board.items.push(
+      {
+        itemId: 'item-1',
+        status: 'Done',
+        issue: other(1),
+        fields: { Track: 'Profile' },
+      },
+      {
+        itemId: 'item-2',
+        status: 'Todo',
+        issue: other(2),
+      },
+      {
+        itemId: 'item-3',
+        status: 'In Progress',
+        issue: {
+          repository: 'acme/app',
+          number: 3,
+        },
+        parent: other(2),
+      },
+    );
+
+    expect((await tick(world.dependencies)).board).toEqual([]);
+    expect(world.board.fieldChanges).toEqual([]);
+    expect(world.board.moves).toEqual([]);
+  });
 });

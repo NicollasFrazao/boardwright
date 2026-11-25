@@ -27984,7 +27984,10 @@ async function inferField(pass, field) {
     index,
     item
   ] of pass.items.entries()) {
-    const value = item.fields[field] === void 0 ? inferFieldValue(
+    const value = item.fields[field] === void 0 && isAllowed(
+      pass,
+      item.issue
+    ) ? inferFieldValue(
       pass.items,
       item,
       field
@@ -28025,7 +28028,10 @@ async function startParents(pass) {
   } of parentsToStart(
     pass.items,
     rule
-  )) {
+  ).filter((candidate) => isAllowed(
+    pass,
+    candidate.parent.issue
+  ))) {
     await record2(
       pass,
       {
@@ -28040,6 +28046,12 @@ async function startParents(pass) {
       )
     );
   }
+}
+function isAllowed(pass, issue2) {
+  return isAllowedRepository(
+    issue2.repository,
+    pass.dependencies.config.repositories
+  );
 }
 async function record2(pass, action, apply) {
   if (pass.dryRun) {
