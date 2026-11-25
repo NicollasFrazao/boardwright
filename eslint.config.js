@@ -91,9 +91,10 @@ const layoutRules = {
     },
   ],
   '@stylistic/max-statements-per-line': ['error', { max: 1 }],
-  '@stylistic/function-paren-newline': ['error', 'multiline-arguments'],
-  '@stylistic/object-curly-spacing': ['error', 'always'],
-  '@stylistic/object-curly-newline': ['error', { multiline: true, consistent: true }],
+  // Replaces function-paren-newline, object-curly-spacing and object-curly-newline (deprecated in
+  // @stylistic 6): a list on one line keeps its brackets tight (braces spaced); a list that breaks puts
+  // a line break after the opening and before the closing bracket. One item per line is local/one-per-line.
+  '@stylistic/list-style': 'error',
   '@stylistic/padding-line-between-statements': [
     'error',
     { blankLine: 'always', prev: '*', next: ['if', 'return', 'throw', 'for', 'while', 'try'] },
