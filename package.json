@@ -26,7 +26,8 @@
     "check:context": "node scripts/check-context-surfaces.mjs",
     "export:context": "node scripts/check-context-surfaces.mjs --write",
     "prepare": "husky",
-    "build:action": "node scripts/build-action.mjs"
+    "build:action": "node scripts/build-action.mjs",
+    "build:npm": "node scripts/build-npm.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
