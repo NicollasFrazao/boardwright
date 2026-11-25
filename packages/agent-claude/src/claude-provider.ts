@@ -65,6 +65,32 @@ const FILE_TOOLS: ReadonlySet<string> = new Set([
   'NotebookEdit',
 ]);
 
+/** The tools that read files, and the input fields that name what they read. */
+const READ_TOOLS: ReadonlyMap<string, readonly string[]> = new Map([
+  [
+    'Read',
+    ['file_path'],
+  ],
+  [
+    'NotebookRead',
+    ['notebook_path'],
+  ],
+  [
+    'Glob',
+    [
+      'path',
+      'pattern',
+    ],
+  ],
+  [
+    'Grep',
+    ['path'],
+  ],
+]);
+
+/** Where a glob pattern stops being a literal path. */
+const GLOB_SYNTAX = /[*?[{]/u;
+
 /** Pushing and talking to GitHub are the pipeline's job, after it has checked the change. */
 const FORBIDDEN_COMMAND = /\bgit\s+push\b|(?:^|[;&|(\s])gh\s/u;
 
@@ -290,12 +316,13 @@ export class ClaudeAgentProvider implements AgentProvider {
 }
 
 /**
- * A `PreToolUse` hook that denies writes to denied paths or outside the worktree, and commands that push
- * or call GitHub.
+ * A `PreToolUse` hook that denies writes to denied paths or outside the worktree, reads outside the
+ * worktree, and commands that push or call GitHub.
  *
  * @remarks
  * This is the first line; the core checks the diff again before anything is pushed, because a shell
- * command can still write a file this hook cannot see.
+ * command can still write a file this hook cannot see. Reads are limited to the worktree because the
+ * session runs as the machine's user, whose home holds credentials (the GitHub CLI's token, keys).
  */
 export function guardTools(
   cwd: string,
@@ -325,6 +352,16 @@ function deniedReason(
 ): string | undefined {
   const fields = typeof toolInput === 'object' && toolInput !== null ? toolInput as Record<string, unknown> : {};
 
+  const readFields = READ_TOOLS.get(toolName);
+
+  if (readFields !== undefined) {
+    return readProblem(
+      cwd,
+      readFields,
+      fields,
+    );
+  }
+
   if (FILE_TOOLS.has(toolName)) {
     const target = fields.file_path ?? fields.notebook_path;
 
@@ -346,11 +383,48 @@ function deniedReason(
   return undefined;
 }
 
-function pathProblem(
+/** A read may name any path of the worktree, a denied one included, and nothing outside it. */
+function readProblem(
   cwd: string,
-  deniedPaths: readonly string[],
+  readFields: readonly string[],
+  fields: Readonly<Record<string, unknown>>,
+): string | undefined {
+  for (const field of readFields) {
+    const value = fields[field];
+
+    if (typeof value !== 'string') {
+      continue;
+    }
+
+    // A pattern is checked up to its first wildcard: `/home/**` reads from /home.
+    const target = field === 'pattern' ? value.split(GLOB_SYNTAX)[0] ?? '' : value;
+
+    if (
+      target !== ''
+      && worktreePath(
+        cwd,
+        target,
+      ) === undefined
+    ) {
+      return `${value} is outside the worktree; agents read only the worktree.`;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * The target relative to the worktree, with forward slashes; `undefined` when it is outside, a
+ * home-relative path (`~`) included.
+ */
+function worktreePath(
+  cwd: string,
   target: string,
 ): string | undefined {
+  if (target.startsWith('~')) {
+    return undefined;
+  }
+
   const path = relative(
     cwd,
     isAbsolute(target) ? target : join(
@@ -362,10 +436,20 @@ function pathProblem(
     '/',
   );
 
-  if (
-    path.startsWith('..')
-    || isAbsolute(path)
-  ) {
+  return path.startsWith('..') || isAbsolute(path) ? undefined : path;
+}
+
+function pathProblem(
+  cwd: string,
+  deniedPaths: readonly string[],
+  target: string,
+): string | undefined {
+  const path = worktreePath(
+    cwd,
+    target,
+  );
+
+  if (path === undefined) {
     return `${target} is outside the worktree.`;
   }
 

@@ -368,6 +368,52 @@ describe('guardTools', () => {
       { command: 'npm test; gh pr create --fill' },
       'boardwright pushes the branch',
     ],
+    [
+      'Read',
+      { file_path: '/home/someone/.config/gh/hosts.yml' },
+      '/home/someone/.config/gh/hosts.yml is outside the worktree; agents read only the worktree.',
+    ],
+    [
+      'Read',
+      { file_path: '~/.ssh/id_ed25519' },
+      '~/.ssh/id_ed25519 is outside the worktree',
+    ],
+    [
+      'Read',
+      { file_path: '../other/.env' },
+      '../other/.env is outside the worktree',
+    ],
+    [
+      'NotebookRead',
+      { notebook_path: '/srv/notes/notes.ipynb' },
+      '/srv/notes/notes.ipynb is outside the worktree',
+    ],
+    [
+      'Glob',
+      { pattern: '/home/someone/.config/**/*.pem' },
+      '/home/someone/.config/**/*.pem is outside the worktree',
+    ],
+    [
+      'Glob',
+      {
+        pattern: '**/*.json',
+        path: '/home/someone',
+      },
+      '/home/someone is outside the worktree',
+    ],
+    [
+      'Grep',
+      {
+        pattern: 'oauth_token',
+        path: '/home/someone/.config',
+      },
+      '/home/someone/.config is outside the worktree',
+    ],
+    [
+      'Write',
+      { file_path: '~/.bashrc' },
+      '~/.bashrc is outside the worktree.',
+    ],
   ])('denies %s %j', async (
     toolName,
     toolInput,
@@ -405,6 +451,32 @@ describe('guardTools', () => {
     [
       'Read',
       { file_path: '/work/tree/.github/workflows/ci.yml' },
+    ],
+    [
+      'Read',
+      { file_path: 'src/feature.ts' },
+    ],
+    [
+      'Glob',
+      { pattern: 'src/**/*.ts' },
+    ],
+    [
+      'Glob',
+      {
+        pattern: '**/*.ts',
+        path: '/work/tree/packages',
+      },
+    ],
+    [
+      'Grep',
+      { pattern: 'TODO' },
+    ],
+    [
+      'Grep',
+      {
+        pattern: 'TODO',
+        path: 'packages',
+      },
     ],
     [
       'Write',
