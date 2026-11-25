@@ -48,6 +48,7 @@ export GITHUB_TOKEN=$(gh auth token)       # or BOARDWRIGHT_GITHUB_TOKEN; needs 
 npm run boardwright -- init --owner <login> --project <number> --repository <owner/name>
 npm run boardwright -- doctor               # config vs board and repositories; exit 1 on a failure
 npm run boardwright -- once --dry-run       # what one tick would do; writes nothing
+npm run boardwright -- run --interval 60    # ticks until Ctrl+C; JSON logs on stderr
 ```
 
 `--config <path>` reads another file; `--json` prints the report as JSON. `once` without `--dry-run` acts:

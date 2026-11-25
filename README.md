@@ -34,6 +34,7 @@ npm run boardwright -- init --owner <login> --project <number> --repository <own
 npm run boardwright -- doctor          # checks the config against the board; changes nothing
 npm run boardwright -- once --dry-run  # prints what one tick would do; changes nothing
 npm run boardwright -- once            # runs the due stages: needs ANTHROPIC_API_KEY (or another documented method)
+npm run boardwright -- run             # keeps ticking until Ctrl+C
 ```
 
 The agent authenticates only through the [Claude Agent SDK's documented methods](https://code.claude.com/docs/en/agent-sdk/quickstart):
