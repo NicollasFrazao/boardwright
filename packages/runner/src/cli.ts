@@ -17,7 +17,10 @@ import {
 } from '@boardwright/github';
 import { sleep } from './daemon.ts';
 import { acquireFileLock } from './lock.ts';
-import { runProgram } from './program.ts';
+import {
+  runProgram,
+  type AppCredentials,
+} from './program.ts';
 // The root manifest carries the release version. esbuild inlines its version only (scripts/version-only-manifest.mjs), so dist/ prints the version it was built from.
 import manifest from '../../../package.json' with { type: 'json' };
 
@@ -37,6 +40,24 @@ function cacheDirectory(): string {
     ),
     'boardwright',
   );
+}
+
+const tokensByApp = new WeakMap<AppCredentials, GitHubAppTokens>();
+
+/** One token cache per App, shared by the reviews and the merges of a run. */
+function appTokens(credentials: AppCredentials): GitHubAppTokens {
+  let tokens = tokensByApp.get(credentials);
+
+  if (tokens === undefined) {
+    tokens = new GitHubAppTokens(credentials);
+
+    tokensByApp.set(
+      credentials,
+      tokens,
+    );
+  }
+
+  return tokens;
 }
 
 // SIGINT or SIGTERM lets the current tick finish and stops the runner.
@@ -112,6 +133,7 @@ process.exitCode = await runProgram(
     connect: (
       config,
       token,
+      app,
     ) => {
       const client = createGitHubClient({ token });
 
@@ -120,7 +142,10 @@ process.exitCode = await runProgram(
           client,
           config.project,
         ),
-        repoHost: new GitHubRepoHost(client),
+        repoHost: new GitHubRepoHost(
+          client,
+          app === undefined ? {} : { reviewer: (repository) => appTokens(app).clientFor(repository) },
+        ),
       };
     },
     shutdownSignal: () => shutdown.signal,
@@ -131,7 +156,7 @@ process.exitCode = await runProgram(
       `${name}.lock`,
     )),
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
-    connectAppMerger: (credentials) => appMerger(new GitHubAppTokens(credentials)),
+    connectAppMerger: (credentials) => appMerger(appTokens(credentials)),
     connectAgents: (
       config,
       token,

@@ -35,7 +35,7 @@ access to the repository) and moving its card to the Status a stage starts from.
 | --- | --- | --- | --- | --- | --- |
 | `refine` (optional) | Refine | — | Ready | Todo | Reads the code and posts a plan on the issue; changes nothing |
 | `implement` | Ready | In Progress | In review | Todo | Works on its own branch and opens a pull request that closes the issue, assigned to the issue's assignees |
-| `review` | In review | — | — | — | Reviews each new head of the pull request; comments only, never approves |
+| `review` | In review | — | — | — | Reviews each new head of the pull request; comments only, unless `approve` is on |
 | `address-feedback` | In review | — | — | — | Pushes fixes for unresolved review threads and failing checks, then the pipeline resolves the threads it addressed |
 | `merge` (opt-in) | In review | — | — | — | No agent by default: a deterministic policy merges through native auto-merge |
 
@@ -212,6 +212,12 @@ stage, and a `context` that chooses the playbook from the repository's
 
 A status is written as `when: { status: Ready }`. The Status options must already exist on the board:
 boardwright never creates them, and `doctor` lists the ones that are missing.
+
+The `review` stage only comments by default. With `approve: true` it submits its verdict as an approval or
+a change request, so a ruleset that requires approving reviews can pass without a person. That needs a
+GitHub App (`BOARDWRIGHT_APP_ID` and its key, [ADR 0005](.context/docs/adr/0005-github-app-as-the-pipeline-identity.md)):
+the App submits the reviews, because GitHub does not let the author of a pull request approve it. An
+agent's approval then stands in for a person's review, so turning it on is a trust decision.
 
 ### The merge stage
 

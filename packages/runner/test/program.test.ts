@@ -34,6 +34,7 @@ interface TestEnvironment extends ProgramEnvironment {
   readonly err: string[];
   readonly tokens: string[];
   readonly apps: AppCredentials[];
+  readonly reviewers: AppCredentials[];
 }
 
 function environment(
@@ -51,6 +52,7 @@ function environment(
   const err: string[] = [];
   const tokens: string[] = [];
   const apps: AppCredentials[] = [];
+  const reviewers: AppCredentials[] = [];
 
   return {
     files,
@@ -58,6 +60,7 @@ function environment(
     err,
     tokens,
     apps,
+    reviewers,
     version: '1.2.3',
     variables,
     readFile: (path) => Promise.resolve(files.get(path)),
@@ -125,8 +128,13 @@ function environment(
     connect: (
       _config,
       token,
+      app,
     ) => {
       tokens.push(token);
+
+      if (app !== undefined) {
+        reviewers.push(app);
+      }
 
       return {
         board: world.board,
@@ -711,6 +719,49 @@ describe('boardwright once with a merge stage', () => {
       ],
       dry,
     )).toBe(EXIT.ok);
+  });
+});
+
+describe('boardwright once with an approving review stage', () => {
+  const APPROVING = `${CONFIG}  - id: review\n    approve: true\n`;
+
+  it('refuses to approve without a GitHub App', async () => {
+    const env = environment();
+
+    env.files.set(
+      'pipeline.config.yml',
+      APPROVING,
+    );
+
+    expect(await runProgram(
+      ['once'],
+      env,
+    )).toBe(EXIT.usage);
+
+    expect(env.err[0]).toContain('approves only as a GitHub App');
+  });
+
+  it('gives the App to the repository host, which submits the reviews as the App', async () => {
+    const env = environment(
+      scenario(),
+      {
+        GITHUB_TOKEN: 'secret',
+        BOARDWRIGHT_APP_ID: '5925672',
+        BOARDWRIGHT_APP_PRIVATE_KEY: 'PEM',
+      },
+    );
+
+    env.files.set(
+      'pipeline.config.yml',
+      APPROVING,
+    );
+
+    expect(await runProgram(
+      ['once'],
+      env,
+    )).toBe(EXIT.ok);
+
+    expect(env.reviewers.map((app) => app.appId)).toEqual(['5925672']);
   });
 });
 

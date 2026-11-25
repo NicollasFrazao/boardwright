@@ -633,6 +633,7 @@ describe('GitHubRepoHost: reviews', () => {
         body: 'Name this constant.',
       },
     ],
+    event: 'comment' as const,
   };
 
   it('posts a review that only comments, with its line comments on the new side', async () => {
@@ -662,6 +663,67 @@ describe('GitHubRepoHost: reviews', () => {
         },
       ],
     });
+  });
+
+  it.each([
+    [
+      'approve',
+      'APPROVE',
+    ],
+    [
+      'request-changes',
+      'REQUEST_CHANGES',
+    ],
+  ] as const)('submits a %s verdict as %s on the reviewer\'s client', async (
+    event,
+    githubEvent,
+  ) => {
+    const replay = new GitHubReplay([
+      {
+        method: 'POST',
+        path: '/repos/acme/app/pulls/15/reviews',
+        body: { id: 1 },
+      },
+    ]);
+
+    const authorizations: string[] = [];
+    const reviewed: string[] = [];
+
+    const host = new GitHubRepoHost(
+      createGitHubClient({
+        token: 'main-token',
+        fetch: replay.fetch,
+      }),
+      {
+        reviewer: (repository) => {
+          reviewed.push(repository);
+
+          return Promise.resolve(createGitHubClient({
+            token: 'app-token',
+            fetch: (
+              input,
+              init,
+            ) => {
+              authorizations.push(new Headers(init?.headers).get('authorization') ?? '');
+
+              return replay.fetch(
+                input,
+                init,
+              );
+            },
+          }));
+        },
+      },
+    );
+
+    await host.submitReview({
+      ...draft,
+      event,
+    });
+
+    expect((replay.nth(0).body as { event: string }).event).toBe(githubEvent);
+    expect(reviewed).toEqual(['acme/app']);
+    expect(authorizations).toEqual(['token app-token']);
   });
 
   it('folds the line comments into the body when GitHub cannot place them', async () => {
