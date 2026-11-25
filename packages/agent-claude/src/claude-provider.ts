@@ -55,6 +55,7 @@ export const DENIED_TOOLS: readonly string[] = [
 export const TOKEN_VARIABLES: readonly string[] = [
   'BOARDWRIGHT_GITHUB_TOKEN',
   'BOARDWRIGHT_MERGE_TOKEN',
+  'BOARDWRIGHT_APP_PRIVATE_KEY',
   'GITHUB_TOKEN',
   'GH_TOKEN',
 ];

@@ -29669,6 +29669,7 @@ var DENIED_TOOLS = [
 var TOKEN_VARIABLES = [
   "BOARDWRIGHT_GITHUB_TOKEN",
   "BOARDWRIGHT_MERGE_TOKEN",
+  "BOARDWRIGHT_APP_PRIVATE_KEY",
   "GITHUB_TOKEN",
   "GH_TOKEN"
 ];
@@ -30390,6 +30391,9 @@ function pendingPaths(output2) {
 function lines(output2) {
   return output2.split("\n").map((line) => line.trim()).filter((line) => line !== "");
 }
+
+// packages/github/src/app-tokens.ts
+import { createSign } from "node:crypto";
 
 // node_modules/universal-user-agent/index.js
 function getUserAgent() {
@@ -34477,6 +34481,100 @@ function isUnprocessable(error62) {
   return typeof error62 === "object" && error62 !== null && "status" in error62 && error62.status === HTTP_UNPROCESSABLE;
 }
 
+// packages/github/src/app-tokens.ts
+var MS_PER_SECOND = 1e3;
+var SECONDS_PER_MINUTE = 60;
+var JWT_BACKDATE_SECONDS = 60;
+var JWT_LIFETIME_SECONDS = 540;
+var RENEW_BEFORE_MINUTES = 5;
+var RENEW_BEFORE_MS = RENEW_BEFORE_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
+var GitHubAppTokens = class {
+  credentials;
+  fetch;
+  now;
+  installations = /* @__PURE__ */ new Map();
+  tokens = /* @__PURE__ */ new Map();
+  key;
+  constructor(credentials, options = {}) {
+    this.credentials = credentials;
+    this.fetch = options.fetch;
+    this.now = options.now ?? (() => /* @__PURE__ */ new Date());
+  }
+  /** A client that acts as the App's installation on the repository's owner. */
+  async clientFor(repository) {
+    return createGitHubClient({
+      token: await this.tokenFor(repository),
+      ...this.fetch === void 0 ? {} : { fetch: this.fetch }
+    });
+  }
+  /**
+   * An installation token for the repository's owner.
+   *
+   * @throws when the App is not installed on the repository (GitHub's 404).
+   */
+  async tokenFor(repository) {
+    const installation = await this.installationOf(repository);
+    const cached2 = this.tokens.get(installation);
+    if (cached2 !== void 0 && cached2.expiresAt - RENEW_BEFORE_MS > this.now().getTime()) {
+      return cached2.token;
+    }
+    const app = await this.appClient();
+    const { data } = await app.rest.apps.createInstallationAccessToken({ installation_id: installation });
+    this.tokens.set(
+      installation,
+      {
+        token: data.token,
+        expiresAt: Date.parse(data.expires_at)
+      }
+    );
+    return data.token;
+  }
+  async installationOf(repository) {
+    const { owner } = splitRepository(repository);
+    const known = this.installations.get(owner);
+    if (known !== void 0) {
+      return known;
+    }
+    const { data } = await (await this.appClient()).rest.apps.getRepoInstallation(splitRepository(repository));
+    this.installations.set(
+      owner,
+      data.id
+    );
+    return data.id;
+  }
+  /** A client authenticated as the App itself, with a fresh JWT. */
+  async appClient() {
+    this.key ??= this.credentials.privateKey();
+    return createGitHubClient({
+      token: appJwt(
+        this.credentials.appId,
+        await this.key,
+        this.now()
+      ),
+      ...this.fetch === void 0 ? {} : { fetch: this.fetch }
+    });
+  }
+};
+function appJwt(appId, privateKey, now) {
+  const seconds = Math.floor(now.getTime() / MS_PER_SECOND);
+  const unsigned = [
+    {
+      alg: "RS256",
+      typ: "JWT"
+    },
+    {
+      iat: seconds - JWT_BACKDATE_SECONDS,
+      exp: seconds + JWT_LIFETIME_SECONDS,
+      iss: appId
+    }
+  ].map((part) => Buffer.from(JSON.stringify(part)).toString("base64url")).join(".");
+  const signature = createSign("RSA-SHA256").update(unsigned).sign(
+    privateKey,
+    "base64url"
+  );
+  return `${unsigned}.${signature}`;
+}
+
 // packages/github/src/project-board.ts
 var PROJECT_QUERY = `query($login: String!, $number: Int!, $field: String!) {
   repositoryOwner(login: $login) {
@@ -35222,6 +35320,11 @@ var GitHubMerger = class {
     }
   }
 };
+function appMerger(tokens) {
+  return {
+    merge: async (request2) => new GitHubMerger(await tokens.clientFor(request2.repository)).merge(request2)
+  };
+}
 function isMethodNotAllowed(error62) {
   return typeof error62 === "object" && error62 !== null && "status" in error62 && error62.status === HTTP_METHOD_NOT_ALLOWED;
 }
@@ -35817,7 +35920,7 @@ var TOKEN_VARIABLES2 = [
   "GITHUB_TOKEN",
   "GH_TOKEN"
 ];
-var MS_PER_SECOND = 1e3;
+var MS_PER_SECOND2 = 1e3;
 var DEFAULT_INTERVAL_SECONDS = 60;
 var MIN_INTERVAL_SECONDS = 10;
 var MAX_BACKOFF_MS = 9e5;
@@ -36023,7 +36126,7 @@ async function run2(environment, options) {
   }
   try {
     await runDaemon({
-      intervalMs: options.intervalSeconds * MS_PER_SECOND,
+      intervalMs: options.intervalSeconds * MS_PER_SECOND2,
       maxBackoffMs: MAX_BACKOFF_MS,
       signal: environment.shutdownSignal(),
       tick: () => tick(dependencies),
@@ -36120,14 +36223,47 @@ function dryRunMerger() {
   return { merge: () => Promise.reject(new Error("A dry run never acts.")) };
 }
 function mergerFor(environment, config2) {
+  const credentials = appCredentials(environment);
+  if (credentials !== void 0) {
+    return environment.connectAppMerger(credentials);
+  }
   const token = environment.variables.BOARDWRIGHT_MERGE_TOKEN;
   if (token === void 0 || token === "") {
     if (config2.stages.some((stage2) => stage2.id === "merge")) {
-      throw new UsageError("The merge stage needs BOARDWRIGHT_MERGE_TOKEN, a token other than the one that opens pull requests.");
+      throw new UsageError("The merge stage needs a GitHub App (BOARDWRIGHT_APP_ID with its key) or BOARDWRIGHT_MERGE_TOKEN, a token other than the one that opens pull requests.");
     }
     return { merge: () => Promise.reject(new Error("No merge stage is configured.")) };
   }
   return environment.connectMerger(token);
+}
+function appCredentials(environment) {
+  const {
+    BOARDWRIGHT_APP_ID: appId,
+    BOARDWRIGHT_APP_PRIVATE_KEY: key,
+    BOARDWRIGHT_APP_PRIVATE_KEY_FILE: keyFile
+  } = environment.variables;
+  if (appId === void 0 || appId === "") {
+    return void 0;
+  }
+  if (key !== void 0 && key !== "") {
+    return {
+      appId,
+      privateKey: () => Promise.resolve(key)
+    };
+  }
+  if (keyFile === void 0 || keyFile === "") {
+    throw new UsageError("BOARDWRIGHT_APP_ID needs the App's key: BOARDWRIGHT_APP_PRIVATE_KEY_FILE or BOARDWRIGHT_APP_PRIVATE_KEY.");
+  }
+  return {
+    appId,
+    privateKey: async () => {
+      const text = await environment.readFile(keyFile);
+      if (text === void 0) {
+        throw new Error(`The GitHub App key ${keyFile} does not exist.`);
+      }
+      return text;
+    }
+  };
 }
 function silentLogger() {
   return {
@@ -36258,6 +36394,7 @@ process.exitCode = await runProgram(
       `${name}.lock`
     )),
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
+    connectAppMerger: (credentials) => appMerger(new GitHubAppTokens(credentials)),
     connectAgents: (config2, token) => ({
       workspaces: new GitWorkspaces({
         directory: cacheDirectory(),

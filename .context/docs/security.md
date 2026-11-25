@@ -38,8 +38,11 @@ the people who could have made the change themselves.
   permission, so it can never start an agent.
 - **Repository token:** fine-grained, contents/pull requests/issues read-write on the allowlisted
   repositories; pull requests opened with the default token do not trigger CI.
-- **Merge token (opt-in):** `BOARDWRIGHT_MERGE_TOKEN`, separate from the token that opened the pull
-  request; `once` refuses to run a config with a merge stage without it. The merger merges at the
+- **Merge identity (opt-in):** a GitHub App (`BOARDWRIGHT_APP_ID` with its key, ADR 0005) or
+  `BOARDWRIGHT_MERGE_TOKEN`, either separate from the token that opened the pull request; `once` refuses
+  to run a config with a merge stage without one. The App's key is read from a file or a secret, never
+  stored by boardwright, and its installation tokens last an hour; the key's variable is removed from the
+  agent's environment, and the agent's sandbox denies reading `~/.config/boardwright`. The merger merges at the
   evaluated head commit (`sha`), so a push after the evaluation fails the merge instead of merging
   unchecked commits, and it never bypasses the ruleset: it falls back to native auto-merge.
 - **Merge gatekeeper (`mode: agent`):** a read-only session asked only after the policy passed. It can
@@ -64,7 +67,8 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
   cloud keys, registry tokens), they reach only the listed hosts, and they cannot retry outside the
   sandbox. On Linux it needs `bubblewrap` and `socat`; without them the session refuses to start rather
   than run unsandboxed;
-- the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `BOARDWRIGHT_MERGE_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
+- the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `BOARDWRIGHT_MERGE_TOKEN`, `BOARDWRIGHT_APP_PRIVATE_KEY`,
+  `GITHUB_TOKEN` and `GH_TOKEN`;
 - only the project's settings (`settingSources: ['project']`), not the machine user's;
 - for a review or a plan, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
   `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments; it

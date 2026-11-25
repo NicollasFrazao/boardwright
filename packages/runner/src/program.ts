@@ -69,6 +69,15 @@ export interface ProgramEnvironment {
 
   /** The merger, on its own token. Only `once` without `--dry-run` with a merge stage asks for it. */
   connectMerger(token: string): MergerPort;
+
+  /** The merger as a GitHub App (ADR 0005); preferred over the merge token when the App is configured. */
+  connectAppMerger(credentials: AppCredentials): MergerPort;
+}
+
+/** A GitHub App's id and a way to read its private key on first use. */
+export interface AppCredentials {
+  readonly appId: string;
+  readonly privateKey: () => Promise<string>;
 }
 
 interface GitHubAdapters {
@@ -535,15 +544,22 @@ function dryRunMerger(): MergerPort {
 }
 
 /**
- * The merger for a config with a merge stage, on `BOARDWRIGHT_MERGE_TOKEN`.
+ * The merger for a config with a merge stage: the GitHub App when `BOARDWRIGHT_APP_ID` is set (ADR 0005),
+ * else `BOARDWRIGHT_MERGE_TOKEN`.
  *
- * @throws {@link UsageError} when the config has a merge stage and the token is missing: the identity that
- * merges must not be the one that opened the pull request.
+ * @throws {@link UsageError} when the config has a merge stage and neither is set, or the App has no key:
+ * the identity that merges must not be the one that opened the pull request.
  */
 function mergerFor(
   environment: ProgramEnvironment,
   config: PipelineConfig,
 ): MergerPort {
+  const credentials = appCredentials(environment);
+
+  if (credentials !== undefined) {
+    return environment.connectAppMerger(credentials);
+  }
+
   const token = environment.variables.BOARDWRIGHT_MERGE_TOKEN;
 
   if (
@@ -551,13 +567,65 @@ function mergerFor(
     || token === ''
   ) {
     if (config.stages.some((stage) => stage.id === 'merge')) {
-      throw new UsageError('The merge stage needs BOARDWRIGHT_MERGE_TOKEN, a token other than the one that opens pull requests.');
+      throw new UsageError('The merge stage needs a GitHub App (BOARDWRIGHT_APP_ID with its key) or BOARDWRIGHT_MERGE_TOKEN, a token other than the one that opens pull requests.');
     }
 
     return { merge: () => Promise.reject(new Error('No merge stage is configured.')) };
   }
 
   return environment.connectMerger(token);
+}
+
+/**
+ * The GitHub App of `BOARDWRIGHT_APP_ID`, with its key from `BOARDWRIGHT_APP_PRIVATE_KEY` (the PEM, as CI
+ * secrets hold it) or `BOARDWRIGHT_APP_PRIVATE_KEY_FILE` (a path, for a local runner); `undefined` without
+ * an App id.
+ *
+ * @throws {@link UsageError} when the App id is set without a key.
+ */
+function appCredentials(environment: ProgramEnvironment): AppCredentials | undefined {
+  const {
+    BOARDWRIGHT_APP_ID: appId,
+    BOARDWRIGHT_APP_PRIVATE_KEY: key,
+    BOARDWRIGHT_APP_PRIVATE_KEY_FILE: keyFile,
+  } = environment.variables;
+
+  if (
+    appId === undefined
+    || appId === ''
+  ) {
+    return undefined;
+  }
+
+  if (
+    key !== undefined
+    && key !== ''
+  ) {
+    return {
+      appId,
+      privateKey: () => Promise.resolve(key),
+    };
+  }
+
+  if (
+    keyFile === undefined
+    || keyFile === ''
+  ) {
+    throw new UsageError('BOARDWRIGHT_APP_ID needs the App\'s key: BOARDWRIGHT_APP_PRIVATE_KEY_FILE or BOARDWRIGHT_APP_PRIVATE_KEY.');
+  }
+
+  return {
+    appId,
+    privateKey: async () => {
+      const text = await environment.readFile(keyFile);
+
+      if (text === undefined) {
+        throw new Error(`The GitHub App key ${keyFile} does not exist.`);
+      }
+
+      return text;
+    },
+  };
 }
 
 function silentLogger(): Logger {
