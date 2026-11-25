@@ -1,3 +1,4 @@
+import { parseEnv } from 'node:util';
 import {
   scenario,
   type Scenario,
@@ -56,6 +57,21 @@ function environment(
     version: '1.2.3',
     variables,
     readFile: (path) => Promise.resolve(files.get(path)),
+    // As process.loadEnvFile: the file's variables, never over one already set.
+    loadEnvFile: (path) => {
+      const text = files.get(path);
+
+      if (text === undefined) {
+        throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+      }
+
+      for (const [
+        name,
+        value,
+      ] of Object.entries(parseEnv(text))) {
+        variables[name] ??= value;
+      }
+    },
     createFile: (
       path,
       text,
@@ -590,6 +606,106 @@ describe('boardwright once with a merge stage', () => {
       ],
       dry,
     )).toBe(EXIT.ok);
+  });
+});
+
+describe('boardwright --env-file', () => {
+  it('reads the GitHub token from the file', async () => {
+    const env = environment(
+      scenario(),
+      {},
+    );
+
+    env.files.set(
+      '.env',
+      '# local run\nGITHUB_TOKEN=from-file\nBOARDWRIGHT_CACHE_DIR=cache\n',
+    );
+
+    expect(await runProgram(
+      [
+        'doctor',
+        '--env-file',
+        '.env',
+      ],
+      env,
+    )).toBe(EXIT.ok);
+
+    expect(env.tokens).toEqual(['from-file']);
+    expect(env.variables.BOARDWRIGHT_CACHE_DIR).toBe('cache');
+  });
+
+  it('keeps a variable already set over the file', async () => {
+    const env = environment();
+
+    env.files.set(
+      '.env',
+      'GITHUB_TOKEN=from-file\n',
+    );
+
+    expect(await runProgram(
+      [
+        'doctor',
+        '--env-file=.env',
+      ],
+      env,
+    )).toBe(EXIT.ok);
+
+    expect(env.tokens).toEqual(['secret']);
+  });
+
+  it('exits 2 naming a missing file, before reaching GitHub', async () => {
+    const env = environment();
+
+    expect(await runProgram(
+      [
+        'doctor',
+        '--env-file',
+        'missing.env',
+      ],
+      env,
+    )).toBe(EXIT.usage);
+
+    expect(env.err.join('\n')).toContain('Cannot load the env file missing.env');
+    expect(env.tokens).toEqual([]);
+  });
+
+  it('exits 2 when the option has no path', async () => {
+    const env = environment();
+
+    expect(await runProgram(
+      [
+        'doctor',
+        '--env-file',
+      ],
+      env,
+    )).toBe(EXIT.usage);
+
+    expect(env.err).toEqual(['--env-file needs a path.']);
+  });
+
+  it('reports an error that is not an Error', async () => {
+    const env = environment();
+
+    expect(await runProgram(
+      [
+        'doctor',
+        '--env-file',
+        '.env',
+      ],
+      {
+        ...env,
+        loadEnvFile: () => {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error -- the test needs a thrown value that is not an Error
+          throw 'unreadable';
+        },
+      },
+    )).toBe(EXIT.usage);
+
+    expect(env.err).toEqual(['Cannot load the env file .env: unreadable']);
+  });
+
+  it('lists --env-file in the usage', () => {
+    expect(USAGE).toContain('--env-file <path>');
   });
 });
 

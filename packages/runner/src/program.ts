@@ -40,6 +40,13 @@ export interface ProgramEnvironment {
   readonly variables: Readonly<Record<string, string | undefined>>;
   readFile(path: string): Promise<string | undefined>;
 
+  /**
+   * Adds the variables of a `.env` file to `variables`, keeping every variable already set.
+   *
+   * @throws {@link Error} when the file is missing or cannot be read.
+   */
+  loadEnvFile(path: string): void;
+
   /** Writes a new file; resolves `false` when the file already exists. */
   createFile(path: string, text: string): Promise<boolean>;
   stdout(text: string): void;
@@ -99,6 +106,7 @@ Commands:
 
 Options:
   --config <path>   The config file (default: ${DEFAULT_CONFIG_PATH})
+  --env-file <path> Load environment variables from a .env file; variables already set win
   --json            Print the report as JSON
   --help            Show this help
   --version, -v     Print the version
@@ -130,6 +138,35 @@ function intervalFrom(value: unknown): number {
   }
 
   return seconds;
+}
+
+/**
+ * Loads the `--env-file` before the command runs, so the token and the agent's credentials can come from it.
+ *
+ * @throws {@link UsageError} when the option has no path, or the file is missing or unreadable.
+ */
+function loadEnvFile(
+  environment: ProgramEnvironment,
+  value: unknown,
+): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (
+    typeof value !== 'string'
+    || value === ''
+  ) {
+    throw new UsageError('--env-file needs a path.');
+  }
+
+  try {
+    environment.loadEnvFile(value);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+
+    throw new UsageError(`Cannot load the env file ${value}: ${reason}`);
+  }
 }
 
 /**
@@ -174,6 +211,7 @@ async function dispatch(
     allowPositionals: true,
     options: {
       config: { type: 'string' },
+      'env-file': { type: 'string' },
       json: { type: 'boolean' },
       help: { type: 'boolean' },
       version: {
@@ -214,6 +252,11 @@ async function dispatch(
 
     return EXIT.ok;
   }
+
+  loadEnvFile(
+    environment,
+    values['env-file'],
+  );
 
   switch (command) {
     case 'doctor':

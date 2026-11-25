@@ -52,7 +52,11 @@ npm run boardwright -- run --interval 60    # ticks until Ctrl+C; JSON logs on s
 ```
 
 `--config <path>` reads another file; `--json` prints the report as JSON; `--version` (or `-v`) prints
-the version of the root `package.json` the CLI was built from, for bug reports. `once` without `--dry-run` acts:
+the version of the root `package.json` the CLI was built from, for bug reports. `--env-file <path>`
+loads the variables of a `.env` file before the command runs, with Node's own parser
+(`process.loadEnvFile`): a variable already set wins over the file, and the GitHub tokens it holds
+are still removed from the agent's environment. A missing or unreadable file stops the run; Node
+itself checks the path at startup (TD-15). `once` without `--dry-run` acts:
 it needs a token that can write the repositories' contents, issues and pull requests, and an agent
 credential the Agent SDK accepts, such as `ANTHROPIC_API_KEY` (ADR 0004). A config with a merge stage also needs `BOARDWRIGHT_MERGE_TOKEN`, a token other than the one that
 opens pull requests (ADR 0003). Clones and worktrees live in
