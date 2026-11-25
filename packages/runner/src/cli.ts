@@ -1,10 +1,15 @@
 #!/usr/bin/env node
+import { constants } from 'node:fs';
 import {
+  access,
   readFile,
   writeFile,
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import {
+  delimiter,
+  join,
+} from 'node:path';
 import { ClaudeAgentProvider } from '@boardwright/agent-claude';
 import { GitWorkspaces } from '@boardwright/git';
 import {
@@ -40,6 +45,31 @@ function cacheDirectory(): string {
     ),
     'boardwright',
   );
+}
+
+/** Whether an executable named `name` is in one of the `PATH`'s directories. */
+async function onPath(name: string): Promise<boolean> {
+  for (const directory of (process.env.PATH ?? '').split(delimiter)) {
+    if (directory === '') {
+      continue;
+    }
+
+    try {
+      await access(
+        join(
+          directory,
+          name,
+        ),
+        constants.X_OK,
+      );
+
+      return true;
+    } catch {
+      // Not in this directory; the next one may have it.
+    }
+  }
+
+  return false;
 }
 
 const tokensByApp = new WeakMap<AppCredentials, GitHubAppTokens>();
@@ -158,6 +188,8 @@ process.exitCode = await runProgram(
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
     connectAppMerger: (credentials) => appMerger(appTokens(credentials)),
     inspectApp: appTokens,
+    platform: process.platform,
+    hasCommand: (name) => onPath(name),
     connectAgents: (
       config,
       token,

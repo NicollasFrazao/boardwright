@@ -7,6 +7,8 @@ import {
   type AgentProvider,
   type AppInstallationsPort,
   type BoardPort,
+  type DoctorCheck,
+  type DoctorReport,
   type Logger,
   type MergerPort,
   type PipelineConfig,
@@ -77,6 +79,12 @@ export interface ProgramEnvironment {
 
   /** The App's installations, for `doctor`. */
   inspectApp(credentials: AppCredentials): AppInstallationsPort;
+
+  /** The operating system, as `process.platform` names it. */
+  readonly platform: string;
+
+  /** Whether a command is on the `PATH`, for `doctor`'s machine checks. */
+  hasCommand(name: string): Promise<boolean>;
 }
 
 /** A GitHub App's id and a way to read its private key on first use. */
@@ -337,13 +345,68 @@ async function doctor(
     ...app === undefined ? {} : { app: environment.inspectApp(app) },
   });
 
+  const sandbox = await checkSandbox(
+    environment,
+    config,
+  );
+
+  const full: DoctorReport = {
+    checks: [
+      ...report.checks,
+      ...sandbox,
+    ],
+    hasFailures: report.hasFailures || sandbox.some((check) => check.status === 'fail'),
+  };
+
   environment.stdout(options.json ? JSON.stringify(
-    report,
+    full,
     null,
     2,
-  ) : formatDoctor(report));
+  ) : formatDoctor(full));
 
-  return report.hasFailures ? EXIT.failed : EXIT.ok;
+  return full.hasFailures ? EXIT.failed : EXIT.ok;
+}
+
+/** What the agent's sandbox needs on Linux: bubblewrap isolates the files, socat relays the network. */
+const SANDBOX_COMMANDS: readonly string[] = [
+  'bwrap',
+  'socat',
+];
+
+/**
+ * Whether this machine can run the agent's sandbox (`provider.sandbox`): on Linux a session refuses to
+ * start without bubblewrap and socat, so their absence is a failure here, before any run.
+ */
+async function checkSandbox(
+  environment: ProgramEnvironment,
+  config: PipelineConfig,
+): Promise<DoctorCheck[]> {
+  if (
+    !config.provider.sandbox.enabled
+    || environment.platform !== 'linux'
+  ) {
+    return [];
+  }
+
+  const missing: string[] = [];
+
+  for (const name of SANDBOX_COMMANDS) {
+    if (!await environment.hasCommand(name)) {
+      missing.push(name);
+    }
+  }
+
+  return [
+    missing.length === 0 ? {
+      subject: 'agent sandbox',
+      status: 'ok',
+      detail: 'bubblewrap and socat are installed.',
+    } : {
+      subject: 'agent sandbox',
+      status: 'fail',
+      detail: `${missing.join(' and ')} not found: agent sessions will refuse to start. Install bubblewrap and socat (sudo apt install bubblewrap socat), or set provider.sandbox.enabled: false.`,
+    },
+  ];
 }
 
 async function once(

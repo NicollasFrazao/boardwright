@@ -7372,12 +7372,17 @@ var require_dist = __commonJS({
 });
 
 // packages/runner/src/cli.ts
+import { constants } from "node:fs";
 import {
+  access as access2,
   readFile as readFile3,
   writeFile as writeFile2
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join as join4 } from "node:path";
+import {
+  delimiter,
+  join as join4
+} from "node:path";
 
 // packages/agent-claude/src/claude-provider.ts
 import { existsSync } from "node:fs";
@@ -9551,8 +9556,8 @@ function emoji() {
 }
 var ipv4 = /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/;
 var ipv6 = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$/;
-var mac = (delimiter) => {
-  const escapedDelim = escapeRegex(delimiter ?? ":");
+var mac = (delimiter2) => {
+  const escapedDelim = escapeRegex(delimiter2 ?? ":");
   return new RegExp(`^(?:[0-9A-F]{2}${escapedDelim}){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}${escapedDelim}){5}[0-9a-f]{2}$`);
 };
 var cidrv4 = /^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\/([0-9]|[1-2][0-9]|3[0-2])$/;
@@ -36199,12 +36204,49 @@ async function doctor(environment, options) {
     context: new RepositoryContextProvider(repositoryFiles(repoHost)),
     ...app === void 0 ? {} : { app: environment.inspectApp(app) }
   });
+  const sandbox = await checkSandbox(
+    environment,
+    config2
+  );
+  const full = {
+    checks: [
+      ...report.checks,
+      ...sandbox
+    ],
+    hasFailures: report.hasFailures || sandbox.some((check3) => check3.status === "fail")
+  };
   environment.stdout(options.json ? JSON.stringify(
-    report,
+    full,
     null,
     2
-  ) : formatDoctor(report));
-  return report.hasFailures ? EXIT.failed : EXIT.ok;
+  ) : formatDoctor(full));
+  return full.hasFailures ? EXIT.failed : EXIT.ok;
+}
+var SANDBOX_COMMANDS = [
+  "bwrap",
+  "socat"
+];
+async function checkSandbox(environment, config2) {
+  if (!config2.provider.sandbox.enabled || environment.platform !== "linux") {
+    return [];
+  }
+  const missing = [];
+  for (const name of SANDBOX_COMMANDS) {
+    if (!await environment.hasCommand(name)) {
+      missing.push(name);
+    }
+  }
+  return [
+    missing.length === 0 ? {
+      subject: "agent sandbox",
+      status: "ok",
+      detail: "bubblewrap and socat are installed."
+    } : {
+      subject: "agent sandbox",
+      status: "fail",
+      detail: `${missing.join(" and ")} not found: agent sessions will refuse to start. Install bubblewrap and socat (sudo apt install bubblewrap socat), or set provider.sandbox.enabled: false.`
+    }
+  ];
 }
 async function once(environment, options) {
   const config2 = await loadConfig(
@@ -36443,6 +36485,25 @@ function cacheDirectory() {
     "boardwright"
   );
 }
+async function onPath(name) {
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    if (directory === "") {
+      continue;
+    }
+    try {
+      await access2(
+        join4(
+          directory,
+          name
+        ),
+        constants.X_OK
+      );
+      return true;
+    } catch {
+    }
+  }
+  return false;
+}
 var tokensByApp = /* @__PURE__ */ new WeakMap();
 function appTokens(credentials) {
   let tokens = tokensByApp.get(credentials);
@@ -36541,6 +36602,8 @@ process.exitCode = await runProgram(
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
     connectAppMerger: (credentials) => appMerger(appTokens(credentials)),
     inspectApp: appTokens,
+    platform: process.platform,
+    hasCommand: (name) => onPath(name),
     connectAgents: (config2, token) => ({
       workspaces: new GitWorkspaces({
         directory: cacheDirectory(),
