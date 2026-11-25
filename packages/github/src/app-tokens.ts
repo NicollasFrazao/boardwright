@@ -1,6 +1,11 @@
 import { createSign } from 'node:crypto';
+import type {
+  AppInstallation,
+  AppInstallationsPort,
+} from '@boardwright/core';
 import {
   createGitHubClient,
+  isNotFound,
   splitRepository,
   type GitHubClient,
 } from './client.ts';
@@ -41,7 +46,7 @@ interface CachedToken {
  * @remarks
  * Neither the key nor a token is logged or written anywhere; Octokit holds them only for its requests.
  */
-export class GitHubAppTokens {
+export class GitHubAppTokens implements AppInstallationsPort {
   private readonly credentials: GitHubAppCredentials;
 
   private readonly fetch: typeof fetch | undefined;
@@ -77,7 +82,7 @@ export class GitHubAppTokens {
    * @throws when the App is not installed on the repository (GitHub's 404).
    */
   async tokenFor(repository: string): Promise<string> {
-    const installation = await this.installationOf(repository);
+    const installation = await this.installationIdOf(repository);
     const cached = this.tokens.get(installation);
 
     if (
@@ -101,7 +106,38 @@ export class GitHubAppTokens {
     return data.token;
   }
 
-  private async installationOf(repository: string): Promise<number> {
+  /**
+   * The App's installation on the repository, with its permissions; `undefined` when it is not installed.
+   * `doctor` reads it.
+   */
+  async installationOf(repository: string): Promise<AppInstallation | undefined> {
+    const app = await this.appClient();
+
+    try {
+      const { data } = await app.rest.apps.getRepoInstallation(splitRepository(repository));
+
+      const permissions: Record<string, string> = {};
+
+      for (const [
+        name,
+        level,
+      ] of Object.entries(data.permissions)) {
+        if (typeof level === 'string') {
+          permissions[name] = level;
+        }
+      }
+
+      return { permissions };
+    } catch (error) {
+      if (isNotFound(error)) {
+        return undefined;
+      }
+
+      throw error;
+    }
+  }
+
+  private async installationIdOf(repository: string): Promise<number> {
     const { owner } = splitRepository(repository);
     const known = this.installations.get(owner);
 

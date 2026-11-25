@@ -97,6 +97,14 @@ function environment(
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     connectMerger: () => world.merger,
+    inspectApp: () => ({
+      installationOf: (repository) => Promise.resolve(repository === 'acme/app' ? {
+        permissions: {
+          contents: 'write',
+          pull_requests: 'write',
+        },
+      } : undefined),
+    }),
     connectAppMerger: (credentials) => {
       apps.push(credentials);
 
@@ -156,6 +164,24 @@ describe('boardwright doctor', () => {
     expect(env.out.join('\n')).toContain('ok    board acme#3: "Roadmap", Status: Todo, Ready, In Progress, In review, Done.');
     expect(env.out.join('\n')).toContain(' failures.');
     expect(env.tokens).toEqual(['secret']);
+  });
+
+  it('checks the GitHub App\'s installation when one is configured', async () => {
+    const env = environment(
+      scenario(),
+      {
+        GITHUB_TOKEN: 'secret',
+        BOARDWRIGHT_APP_ID: '1',
+        BOARDWRIGHT_APP_PRIVATE_KEY: 'PEM',
+      },
+    );
+
+    await runProgram(
+      ['doctor'],
+      env,
+    );
+
+    expect(env.out.join('\n')).toContain('warn  acme/app GitHub App: The App lacks issues: write, checks: read');
   });
 
   it('reads each repository\'s context base remotely', async () => {

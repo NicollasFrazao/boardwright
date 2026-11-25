@@ -238,6 +238,17 @@ export interface AgentRequest {
   readonly model: string | undefined;
 }
 
+/** A GitHub App's installation on a repository: the permissions it was granted, by name. */
+export interface AppInstallation {
+  readonly permissions: Readonly<Record<string, string>>;
+}
+
+/** The pipeline's GitHub App (ADR 0005), as `doctor` reads it. */
+export interface AppInstallationsPort {
+  /** The App's installation on the repository; `undefined` when it is not installed there. */
+  installationOf(repository: string): Promise<AppInstallation | undefined>;
+}
+
 /** How an agent session ended. */
 export interface AgentResult {
   /** `blocked` means the agent stopped to ask a person something, as the prompt tells it to. */
