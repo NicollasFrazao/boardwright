@@ -95,8 +95,10 @@ module.exports = {
         orphan: true,
         pathNot: [
           '^packages/[^/]+/src/(index|cli|main)\\.ts$',
+          // The entry of the GitHub Action, bundled into dist/index.js by scripts/build-action.mjs.
+          '^packages/runner/src/action\\.ts$',
           '\\.test\\.(ts|mjs)$',
-          '^scripts/check-context-surfaces\\.mjs$',
+          '^scripts/(check-context-surfaces|build-action)\\.mjs$',
           '\\.d\\.ts$',
         ],
       },

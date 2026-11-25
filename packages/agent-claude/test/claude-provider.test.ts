@@ -103,6 +103,7 @@ describe('ClaudeAgentProvider: the session it starts', () => {
         GITHUB_TOKEN: 'ghp_x',
         GH_TOKEN: 'gho_x',
         BOARDWRIGHT_GITHUB_TOKEN: 'ghp_y',
+        BOARDWRIGHT_MERGE_TOKEN: 'ghp_merge',
       },
     });
 
@@ -146,6 +147,7 @@ describe('ClaudeAgentProvider: the session it starts', () => {
       GITHUB_TOKEN: undefined,
       GH_TOKEN: undefined,
       BOARDWRIGHT_GITHUB_TOKEN: undefined,
+      BOARDWRIGHT_MERGE_TOKEN: undefined,
     });
 
     expect(options).not.toHaveProperty('allowDangerouslySkipPermissions');

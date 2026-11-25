@@ -66,11 +66,12 @@ develops others:
 - `packages/core/` — domain (markers, run decisions, guard rails) and application (config, ports, `tick()`)
 - `packages/context/` — the `ContextProvider` adapters: dotcontext base and plain fallback
 - `packages/github/` — the GitHub adapters: the Projects v2 board and the repository host
-- `packages/runner/` — the CLI: `doctor`, `once --dry-run`, `init`
+- `packages/runner/` — the CLI (`doctor`, `once`, `run`, `init`) and the GitHub Action's entry (`action.ts`)
+- `action.yml`, `dist/` — the GitHub Action and its committed build (`npm run build:action`)
 - `packages/testing/` — fakes of every port and the GitHub API replay, for tests only
 - `packages/git/` — the git workspaces: a cached clone per repository, a worktree per run
 - `packages/agent-claude/` — the Claude provider on the Claude Agent SDK
 - `eslint-rules/` — local readability rules, with RuleTester tests
-- `scripts/` — `check-context-surfaces.mjs` (export and check of the agent surfaces)
+- `scripts/` — `check-context-surfaces.mjs` (export and check of the agent surfaces) and `build-action.mjs` (the Action's `dist/`)
 - `.context/` — this knowledge base
 - `.github/` — CI, CodeQL, Dependabot, the board pipeline, PR and issue templates, CODEOWNERS

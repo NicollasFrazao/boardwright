@@ -101,6 +101,43 @@ jobs:
       - name: Agent surfaces are copies of .context/docs/README.md
         run: npm run check:context
 
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: dist/ is the build of the sources and of package-lock.json
+        run: |
+          npm run build:action
+          changes="$(git status --porcelain --untracked-files=all -- dist)"
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            echo "::error::dist/ is out of date. Run npm run build:action and commit the result."
+            exit 1
+          fi
+      # The Action, as a workflow runs it: Node 24, the agent packages fetched and checked against the
+      # lockfile. The config does not exist, so the CLI exits 2 after the install; that is the expected end.
+      - name: Run the Action
+        id: smoke
+        continue-on-error: true
+        uses: ./
+        with:
+          github-token: not-a-token
+          config: missing.config.yml
+          dry-run: true
+      - name: The Action installed the agent and reached the CLI
+        env:
+          OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          test -x dist/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude
+          dist/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude --version
+          node dist/cli.js --help > /dev/null
+
   commitlint:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

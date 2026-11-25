@@ -57,7 +57,7 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
   allow them;
 - a `PreToolUse` hook that denies writes to a denied path or outside the worktree, and shell commands that
   push or call `gh`;
-- the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
+- the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `BOARDWRIGHT_MERGE_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
 - only the project's settings (`settingSources: ['project']`), not the machine user's;
 - for a review or a plan, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
   `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments; it
@@ -69,6 +69,20 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
 The git workspaces give the token to the runner's own `clone`, `fetch` and `push` through the commands'
 `GIT_CONFIG_*` environment; it is never written to `.git/config`, so the agent cannot read it, and its own
 `git push` has no credentials. The core still checks the diff against the denylist before pushing.
+
+## The GitHub Action
+
+- The CLI runs as a child process with an environment the Action builds: the inputs (`INPUT_*`, which hold
+  the tokens) and the Actions runtime's own credentials (`ACTIONS_RUNTIME_TOKEN`, the OIDC request token,
+  the cache and results URLs) are left out; the tokens go back in only as `BOARDWRIGHT_GITHUB_TOKEN` and
+  `BOARDWRIGHT_MERGE_TOKEN`, which the Claude provider removes from the agent's environment. An agent in
+  the Action can therefore not write to the Actions cache, upload artifacts or mint an OIDC token.
+- The agent's credentials are the step's `env`, not inputs, so boardwright never handles them (ADR 0004).
+- The Agent SDK and its native binary are not in the repository. The Action downloads them from the npm
+  registry at the versions `package-lock.json` pins and checks each tarball against the lockfile's
+  `sha512` integrity before unpacking; a mismatch stops the run with nothing installed.
+- A workflow that runs the Action on `pull_request` from a fork gets no secrets, so the tick fails on the
+  missing token. Never run it on `pull_request_target`: the board token would meet untrusted code.
 
 ## Secrets & Sensitive Data
 

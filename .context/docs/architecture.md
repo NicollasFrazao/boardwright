@@ -18,7 +18,7 @@ laptop and in GitHub Actions.
 
 ```
             ┌──────────── packages/runner (CLI, daemon) ─────┐
-            │            action/ (GitHub Action)              │   composition roots
+            │       action.ts → dist/ (GitHub Action)        │   composition roots
             └───────────────┬───────────────────┬─────────────┘
                             │                   │
    packages/github ─────────┤                   ├───────── packages/agent-claude
@@ -40,7 +40,7 @@ laptop and in GitHub Actions.
 | `packages/agent-claude` | Infrastructure | `AgentProvider` on the Claude Agent SDK: a closed tool list, a `PreToolUse` guard, a token-free environment, a structured report | #5 |
 | `packages/runner` | Interface | CLI: `doctor`, `once` (with `--dry-run`), `init`, and the daemon `run`: ticks on an interval with exponential backoff while ticks fail (up to 15 minutes), stops after the current tick on SIGINT/SIGTERM, and holds a lock file per board so a second runner on the machine refuses to start | #4, #5, #8 |
 | `packages/testing` | (tests only) | Fakes of every port and a replay of the GitHub API; no `src` may import it | #4 |
-| `action/` | Interface | GitHub Action: one `tick()` per event | #8 |
+| `action.yml`, `packages/runner/src/action.ts` | Interface | GitHub Action: one `once` per workflow run, from the bundle in `dist/` (see [tooling.md](tooling.md), "The Action's build") | #8 |
 
 ## Layer rules
 
@@ -51,7 +51,7 @@ Checked by dependency-cruiser (`npm run check:architecture`, `.dependency-cruise
 - `core` imports no other package.
 - An adapter (`context`, `git`, `github`, `agent-*`) imports only the core, never another adapter.
 - Outside the core, only its public API (`packages/core/src/index.ts`) is imported.
-- Nothing imports `runner` or `action`: they are composition roots.
+- Nothing imports `runner`: it is the composition root of both the CLI (`cli.ts`) and the Action (`action.ts`).
 - Source never imports tests; published code never needs a devDependency at run time.
 - No `src` imports `packages/testing`.
 - No cycles, no orphan modules.

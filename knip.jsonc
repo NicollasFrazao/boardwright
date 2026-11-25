@@ -1,5 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  // The Action's build (npm run build:action): bundled code whose sources knip already checks.
+  "ignore": [
+    "dist/**"
+  ],
   "workspaces": {
     ".": {
       "entry": [
@@ -8,6 +12,16 @@
       "project": [
         "eslint-rules/**/*.mjs",
         "scripts/**/*.mjs"
+      ]
+    },
+    "packages/runner": {
+      // The GitHub Action's entry, bundled into dist/index.js by scripts/build-action.mjs.
+      "entry": [
+        "src/action.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
       ]
     },
     "packages/testing": {

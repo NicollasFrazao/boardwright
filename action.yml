@@ -1,0 +1,34 @@
+name: boardwright
+description: Run one tick of a boardwright pipeline, where the columns of a GitHub Project hand issues to coding agents.
+author: Nícollas Frazão
+
+branding:
+  icon: columns
+  color: purple
+
+inputs:
+  github-token:
+    description: >-
+      Token that reads the board and writes to the repositories (contents, issues, pull requests). A user's
+      Project needs a classic token with the project scope; the job's GITHUB_TOKEN cannot read it.
+    required: true
+  merge-token:
+    description: >-
+      Token of the merge stage, an identity other than the one that opens pull requests. Required only when
+      the config has a merge stage.
+    required: false
+    default: ''
+  config:
+    description: The pipeline config, relative to the workspace. Check out the repository that holds it first.
+    required: false
+    default: pipeline.config.yml
+  dry-run:
+    description: Print what the tick would do and change nothing.
+    required: false
+    default: 'false'
+
+# The agent authenticates through the Agent SDK's documented methods, set on the step's env:
+# ANTHROPIC_API_KEY, or a cloud provider's variables. They are not inputs: boardwright never handles them.
+runs:
+  using: node24
+  main: dist/index.js

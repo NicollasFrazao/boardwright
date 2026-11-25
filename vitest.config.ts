@@ -7,9 +7,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts'],
-      // The CLI entry only binds the process, the file system and the token to runProgram, which the
-      // runner's tests cover; running doctor and once --dry-run against a real board is its check.
-      exclude: ['packages/runner/src/cli.ts'],
+      // The entries only bind the process, the file system and the token to the modules the runner's
+      // tests cover (runProgram; actionCommand and installPackages). Their check is a real run:
+      // doctor and once --dry-run against a board, and the Action's smoke job in CI.
+      exclude: [
+        'packages/runner/src/cli.ts',
+        'packages/runner/src/action.ts',
+      ],
       reporter: [
         'text',
         'lcov',
