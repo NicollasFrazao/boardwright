@@ -1,6 +1,6 @@
 {
   "name": "boardwright-monorepo",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Agentic delivery pipelines driven by GitHub Projects: board columns map to agent roles, run locally or in GitHub Actions.",
   "license": "MIT",
   "author": "Nícollas Frazão",
@@ -26,7 +26,8 @@
     "check:context": "node scripts/check-context-surfaces.mjs",
     "export:context": "node scripts/check-context-surfaces.mjs --write",
     "prepare": "husky",
-    "build:action": "node scripts/build-action.mjs"
+    "build:action": "node scripts/build-action.mjs",
+    "build:npm": "node scripts/build-npm.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",

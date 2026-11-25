@@ -160,7 +160,7 @@ const documentationRules = {
 };
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/', 'coverage/', '**/dist/', '.context/'] },
+  { ignores: ['**/node_modules/', 'coverage/', '**/dist/', 'build/', '.context/'] },
 
   {
     files: ['**/*.ts'],

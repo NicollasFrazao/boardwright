@@ -61,7 +61,17 @@ opens pull requests (ADR 0003). Clones and worktrees live in
 
 - Branch from `master` with a prefix (`feat/`, `fix/`, `docs/`, `refactor/`, `chore/`, `test/`, `ci/`).
 - Squash merge only; the pull request title becomes the commit, so it follows Conventional Commits.
-- Releases start at v0.1.0 (#9); the commit types since the last tag decide the next version.
+- The commit types since the last tag decide the next version (`feat` minor, `fix`/`perf`/`refactor`
+  patch, `!` major; while the major is 0, a breaking change bumps the minor).
+- **To release:**
+  1. Open a pull request that sets `version` in the root `package.json` (and the lockfile, with
+     `npm install --package-lock-only`).
+  2. After it merges, publish a GitHub release whose tag is `v<version>` on that commit.
+  3. The release workflow (`.github/workflows/release.yml`) checks that the tag is the version and that
+     `dist/` is up to date, then publishes `build/npm` to npm through trusted publishing (OIDC, with
+     provenance; no token is stored).
+- The Action is used by tag or commit of this repository. Its Marketplace listing is updated by ticking
+  "Publish this Action to the GitHub Marketplace" on the release.
 
 ## Recipes
 

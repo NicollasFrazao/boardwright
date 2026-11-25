@@ -5,8 +5,9 @@ agent role — refine, implement, review, address feedback, and optionally merge
 boardwright moves cards through that flow the way a person would: on a branch, through a pull request,
 under your rulesets and required checks.
 
-> **Status: in development.** Nothing is released yet. The roadmap is
-> [issue #1](https://github.com/NicollasFrazao/boardwright/issues/1), one sub-issue per phase.
+> **Status: v0.1.0, early.** The pipeline runs end to end in tests; a run with a real agent on a
+> sandbox repository is still pending. The roadmap is
+> [issue #1](https://github.com/NicollasFrazao/boardwright/issues/1).
 
 ## How it works
 
@@ -46,17 +47,19 @@ that is interrupted, or two runners on the same board, never run the same attemp
 
 ## Try it
 
-Nothing is published yet; from a clone, with Node 26 (the active LTS):
+With Node 24 or newer:
 
 ```bash
-npm ci
+npm install --global boardwright
 export GITHUB_TOKEN=$(gh auth token)   # a token that can read your board (project scope) and repositories
-npm run boardwright -- init --owner <login> --project <number> --repository <owner/name>
-npm run boardwright -- doctor          # checks the config against the board; changes nothing
-npm run boardwright -- once --dry-run  # prints what one tick would do; changes nothing
-npm run boardwright -- once            # runs the due stages: needs ANTHROPIC_API_KEY (or another documented method)
-npm run boardwright -- run             # keeps ticking until Ctrl+C
+boardwright init --owner <login> --project <number> --repository <owner/name>
+boardwright doctor                     # checks the config against the board; changes nothing
+boardwright once --dry-run             # prints what one tick would do; changes nothing
+boardwright once                       # runs the due stages: needs ANTHROPIC_API_KEY (or another documented method)
+boardwright run                        # keeps ticking until Ctrl+C
 ```
+
+From a clone, `npm run boardwright -- <command>` runs the same CLI from the sources on Node 26.
 
 The agent authenticates only through the [Claude Agent SDK's documented methods](https://code.claude.com/docs/en/agent-sdk/quickstart):
 an API key, Amazon Bedrock, Claude Platform on AWS, Google Cloud or Microsoft Foundry. boardwright never
@@ -95,7 +98,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7          # the repository that holds pipeline.config.yml
-      - uses: NicollasFrazao/boardwright@<commit sha>
+      - uses: NicollasFrazao/boardwright@<commit sha of v0.1.0>   # pin by commit, not by tag
         with:
           github-token: ${{ secrets.BOARDWRIGHT_GITHUB_TOKEN }}
           # merge-token: ${{ secrets.BOARDWRIGHT_MERGE_TOKEN }}  # only with a merge stage

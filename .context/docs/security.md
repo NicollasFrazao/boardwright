@@ -84,6 +84,13 @@ The git workspaces give the token to the runner's own `clone`, `fetch` and `push
 - A workflow that runs the Action on `pull_request` from a fork gets no secrets, so the tick fails on the
   missing token. Never run it on `pull_request_target`: the board token would meet untrusted code.
 
+## Releases
+
+The npm package is published only by `release.yml`, through npm trusted publishing: npm accepts the
+workflow's OIDC token for this repository and workflow file, so no npm token exists to leak, and every
+version carries a provenance attestation that links it to the commit it was built from. The job runs in
+the `npm` environment, whose protection rules decide who can release.
+
 ## Secrets & Sensitive Data
 
 Tokens are read only in the composition roots, never logged, never written to a marker, comment,
