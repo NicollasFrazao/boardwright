@@ -29667,6 +29667,7 @@ var UNATTENDED = [
   'If you cannot go on without a decision from a person, stop and report status "blocked" with exactly what is missing.',
   'Report your result in the structured output: "completed" with a pull request title and body, or "blocked".'
 ].join("\n");
+var SCHEMA_DRAFT = { target: "draft-07" };
 var agentReport = external_exports.object({
   status: external_exports.enum([
     "completed",
@@ -29677,7 +29678,10 @@ var agentReport = external_exports.object({
   pullRequestBody: external_exports.string().optional(),
   addressedThreadIds: external_exports.array(external_exports.string()).optional()
 });
-var REPORT_SCHEMA = external_exports.toJSONSchema(agentReport);
+var REPORT_SCHEMA = external_exports.toJSONSchema(
+  agentReport,
+  SCHEMA_DRAFT
+);
 var reviewReport = external_exports.object({
   status: external_exports.enum([
     "completed",
@@ -29694,7 +29698,10 @@ var reviewReport = external_exports.object({
     body: external_exports.string().min(1)
   }))
 });
-var REVIEW_REPORT_SCHEMA = external_exports.toJSONSchema(reviewReport);
+var REVIEW_REPORT_SCHEMA = external_exports.toJSONSchema(
+  reviewReport,
+  SCHEMA_DRAFT
+);
 var planReport = external_exports.object({
   status: external_exports.enum([
     "completed",
@@ -29703,7 +29710,10 @@ var planReport = external_exports.object({
   summary: external_exports.string(),
   plan: external_exports.string()
 });
-var PLAN_REPORT_SCHEMA = external_exports.toJSONSchema(planReport);
+var PLAN_REPORT_SCHEMA = external_exports.toJSONSchema(
+  planReport,
+  SCHEMA_DRAFT
+);
 var REVIEW_TOOLS = [
   "Read",
   "Glob",

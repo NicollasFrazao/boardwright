@@ -76,6 +76,12 @@ const UNATTENDED = [
   'Report your result in the structured output: "completed" with a pull request title and body, or "blocked".',
 ].join('\n');
 
+/**
+ * The JSON Schema draft of the report schemas. The Claude Code CLI rejects a `--json-schema` that declares
+ * draft 2020-12, zod's default: "no schema with key or ref".
+ */
+const SCHEMA_DRAFT = { target: 'draft-07' } as const;
+
 const agentReport = z.object({
   status: z.enum([
     'completed',
@@ -88,7 +94,10 @@ const agentReport = z.object({
 });
 
 /** The structured output every session must end with. */
-export const REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(agentReport);
+export const REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(
+  agentReport,
+  SCHEMA_DRAFT,
+);
 
 const reviewReport = z.object({
   status: z.enum([
@@ -108,7 +117,10 @@ const reviewReport = z.object({
 });
 
 /** The structured output a review session must end with. */
-export const REVIEW_REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(reviewReport);
+export const REVIEW_REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(
+  reviewReport,
+  SCHEMA_DRAFT,
+);
 
 const planReport = z.object({
   status: z.enum([
@@ -120,7 +132,10 @@ const planReport = z.object({
 });
 
 /** The structured output a planning session must end with. */
-export const PLAN_REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(planReport);
+export const PLAN_REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(
+  planReport,
+  SCHEMA_DRAFT,
+);
 
 /** The tools a reviewing or planning agent may use: it reads and runs checks, it never edits. */
 export const REVIEW_TOOLS: readonly string[] = [
