@@ -10,6 +10,7 @@ import {
   type HookJSONOutput,
   type McpServerConfig,
   type Options,
+  type SandboxSettings,
   type SDKMessage,
   type SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
@@ -87,6 +88,28 @@ const READ_TOOLS: ReadonlyMap<string, readonly string[]> = new Map([
     ['path'],
   ],
 ]);
+
+/**
+ * Credential files a sandboxed shell command may not read: the GitHub CLI's token, boardwright's own App
+ * key, and the usual keys and tokens of a developer's home. The Read tool is kept to the worktree by the guard.
+ */
+export const CREDENTIAL_PATHS: readonly string[] = [
+  '~/.config/gh',
+  '~/.config/boardwright',
+  '~/.claude/.credentials.json',
+  '~/.ssh',
+  '~/.aws',
+  '~/.azure',
+  '~/.config/gcloud',
+  '~/.kube',
+  '~/.docker/config.json',
+  '~/.npmrc',
+  '~/.git-credentials',
+  '~/.netrc',
+  '~/.pypirc',
+  '~/.composer/auth.json',
+  '~/.config/composer/auth.json',
+];
 
 /** Where a glob pattern stops being a literal path. */
 const GLOB_SYNTAX = /[*?[{]/u;
@@ -193,6 +216,15 @@ export interface ClaudeProviderOptions {
 
   /** The environment the agent's process starts from, before the tokens are removed. */
   readonly environment?: Readonly<Record<string, string | undefined>>;
+
+  /** The config's `provider.sandbox`; without it, shell commands run unsandboxed. */
+  readonly sandbox?: AgentSandbox;
+}
+
+/** Whether the agent's shell commands run in the SDK's sandbox, and the hosts they may reach. */
+export interface AgentSandbox {
+  readonly enabled: boolean;
+  readonly allowedDomains: readonly string[];
 }
 
 /**
@@ -207,9 +239,12 @@ export class ClaudeAgentProvider implements AgentProvider {
 
   private readonly environment: Readonly<Record<string, string | undefined>>;
 
+  private readonly sandbox: AgentSandbox | undefined;
+
   constructor(options: ClaudeProviderOptions = {}) {
     this.query = options.query ?? sdkQuery;
     this.environment = options.environment ?? process.env;
+    this.sandbox = options.sandbox;
   }
 
   /** Runs the session to its result, aborting it when the stage's time runs out. */
@@ -308,6 +343,7 @@ export class ClaudeAgentProvider implements AgentProvider {
         }],
       },
       mcpServers,
+      ...this.sandbox?.enabled === true ? { sandbox: sandboxSettings(this.sandbox) } : {},
       env: withoutTokens(this.environment),
       abortController: abort,
       persistSession: false,
@@ -466,6 +502,24 @@ function deny(reason: string): HookJSONOutput {
       permissionDecision: 'deny',
       permissionDecisionReason: reason,
     },
+  };
+}
+
+/**
+ * The SDK's sandbox for the agent's shell commands: no credential file, only the listed hosts, and no
+ * retry outside the sandbox.
+ *
+ * @remarks
+ * The SDK refuses to start the session when the sandbox cannot run (bubblewrap and socat on Linux), rather
+ * than run the commands unsandboxed.
+ */
+export function sandboxSettings(sandbox: AgentSandbox): SandboxSettings {
+  return {
+    enabled: true,
+    failIfUnavailable: true,
+    allowUnsandboxedCommands: false,
+    filesystem: { denyRead: [...CREDENTIAL_PATHS] },
+    network: { allowedDomains: [...sandbox.allowedDomains] },
   };
 }
 

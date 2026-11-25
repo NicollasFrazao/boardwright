@@ -20,10 +20,12 @@ import {
 } from 'vitest';
 import {
   ClaudeAgentProvider,
+  CREDENTIAL_PATHS,
   guardTools,
   PLAN_REPORT_SCHEMA,
   REPORT_SCHEMA,
   REVIEW_REPORT_SCHEMA,
+  sandboxSettings,
   type QueryFunction,
 } from '../src/index.ts';
 
@@ -670,5 +672,76 @@ describe('ClaudeAgentProvider: plan tasks', () => {
       status: 'completed',
       summary: 'x',
     })).status).toBe('failed');
+  });
+});
+
+describe('ClaudeAgentProvider: the sandbox', () => {
+  const sandbox = {
+    enabled: true,
+    allowedDomains: ['registry.npmjs.org'],
+  };
+
+  it('runs shell commands in the SDK sandbox: no credential file, only the listed hosts, no way out', () => {
+    expect(sandboxSettings(sandbox)).toEqual({
+      enabled: true,
+      failIfUnavailable: true,
+      allowUnsandboxedCommands: false,
+      filesystem: { denyRead: [...CREDENTIAL_PATHS] },
+      network: { allowedDomains: ['registry.npmjs.org'] },
+    });
+
+    expect(CREDENTIAL_PATHS).toEqual(expect.arrayContaining([
+      '~/.config/gh',
+      '~/.config/boardwright',
+      '~/.ssh',
+    ]));
+  });
+
+  it.each([
+    [
+      'enabled',
+      sandbox,
+      true,
+    ],
+    [
+      'disabled',
+      {
+        ...sandbox,
+        enabled: false,
+      },
+      false,
+    ],
+    [
+      'absent',
+      undefined,
+      false,
+    ],
+  ])('passes the sandbox to the session only when it is enabled: %s', (
+    _name,
+    option,
+    isSandboxed,
+  ) => {
+    const provider = new ClaudeAgentProvider({
+      query: () => {
+        throw new Error('not called');
+      },
+      ...option === undefined ? {} : { sandbox: option },
+    });
+
+    const options = provider.optionsFor(
+      {
+        stage: 'implement',
+        task: 'change',
+        cwd,
+        prompt: 'x',
+        maxTurns: 1,
+        timeoutMs: 1000,
+        deniedPaths: [],
+        model: undefined,
+      },
+      new AbortController(),
+    );
+
+    expect(options.sandbox !== undefined).toBe(isSandboxed);
   });
 });

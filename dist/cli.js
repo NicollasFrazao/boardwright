@@ -27346,6 +27346,18 @@ var refineStage = external_exports.object({
   }).prefault({}),
   ...limitsOverride
 }).strict();
+var DEFAULT_SANDBOX_DOMAINS = [
+  "registry.npmjs.org",
+  "registry.yarnpkg.com",
+  "pypi.org",
+  "files.pythonhosted.org",
+  "repo.packagist.org",
+  "packagist.org",
+  "github.com",
+  "codeload.github.com",
+  "objects.githubusercontent.com",
+  "api.github.com"
+];
 var DEFAULT_MERGE_DENIED_PATHS = [
   ".github/**",
   "**/migrations/**",
@@ -27431,7 +27443,12 @@ var pipelineConfigSchema = external_exports.object({
   concurrency: external_exports.int().positive().default(1),
   provider: external_exports.object({
     name: external_exports.string().min(1).default("claude"),
-    model: external_exports.string().min(1).optional()
+    model: external_exports.string().min(1).optional(),
+    /** Runs the agent's shell commands in the provider's sandbox: no credential files, only the listed hosts. */
+    sandbox: external_exports.object({
+      enabled: external_exports.boolean().default(true),
+      allowedDomains: external_exports.array(external_exports.string().min(1)).default([...DEFAULT_SANDBOX_DOMAINS])
+    }).strict().prefault({})
   }).strict().prefault({}),
   git: external_exports.object({
     /** Who the agent's commits are attributed to; without it, git's own config on the machine decides. */
@@ -29682,6 +29699,23 @@ var READ_TOOLS = /* @__PURE__ */ new Map([
     ["path"]
   ]
 ]);
+var CREDENTIAL_PATHS = [
+  "~/.config/gh",
+  "~/.config/boardwright",
+  "~/.claude/.credentials.json",
+  "~/.ssh",
+  "~/.aws",
+  "~/.azure",
+  "~/.config/gcloud",
+  "~/.kube",
+  "~/.docker/config.json",
+  "~/.npmrc",
+  "~/.git-credentials",
+  "~/.netrc",
+  "~/.pypirc",
+  "~/.composer/auth.json",
+  "~/.config/composer/auth.json"
+];
 var GLOB_SYNTAX = /[*?[{]/u;
 var FORBIDDEN_COMMAND = /\bgit\s+push\b|(?:^|[;&|(\s])gh\s/u;
 var MS_PER_MINUTE2 = 6e4;
@@ -29752,9 +29786,11 @@ var WRITE_TOOLS = [
 var ClaudeAgentProvider = class {
   query;
   environment;
+  sandbox;
   constructor(options = {}) {
     this.query = options.query ?? sdkQuery;
     this.environment = options.environment ?? process.env;
+    this.sandbox = options.sandbox;
   }
   /** Runs the session to its result, aborting it when the stage's time runs out. */
   async run(request2) {
@@ -29838,6 +29874,7 @@ var ClaudeAgentProvider = class {
         }]
       },
       mcpServers,
+      ...this.sandbox?.enabled === true ? { sandbox: sandboxSettings(this.sandbox) } : {},
       env: withoutTokens(this.environment),
       abortController: abort,
       persistSession: false
@@ -29933,6 +29970,15 @@ function deny(reason) {
       permissionDecision: "deny",
       permissionDecisionReason: reason
     }
+  };
+}
+function sandboxSettings(sandbox) {
+  return {
+    enabled: true,
+    failIfUnavailable: true,
+    allowUnsandboxedCommands: false,
+    filesystem: { denyRead: [...CREDENTIAL_PATHS] },
+    network: { allowedDomains: [...sandbox.allowedDomains] }
   };
 }
 function withoutTokens(environment) {
@@ -36219,7 +36265,7 @@ process.exitCode = await runProgram(
         token,
         author: config2.git.author
       }),
-      agent: new ClaudeAgentProvider()
+      agent: new ClaudeAgentProvider({ sandbox: config2.provider.sandbox })
     })
   }
 );
