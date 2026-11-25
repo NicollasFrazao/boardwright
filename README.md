@@ -5,7 +5,7 @@ agent role — refine, implement, review, address feedback, and optionally merge
 boardwright moves cards through that flow the way a person would: on a branch, through a pull request,
 under your rulesets and required checks.
 
-> **Status: v0.1.0, early.** The pipeline runs end to end in tests; a run with a real agent on a
+> **Status: v0.1.1, early.** The pipeline runs end to end in tests; a run with a real agent on a
 > sandbox repository is still pending. The roadmap is
 > [issue #1](https://github.com/NicollasFrazao/boardwright/issues/1).
 
@@ -98,7 +98,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7          # the repository that holds pipeline.config.yml
-      - uses: NicollasFrazao/boardwright@<commit sha of v0.1.0>   # pin by commit, not by tag
+      - uses: NicollasFrazao/boardwright@<commit sha of v0.1.1>   # pin by commit, not by tag
         with:
           github-token: ${{ secrets.BOARDWRIGHT_GITHUB_TOKEN }}
           # merge-token: ${{ secrets.BOARDWRIGHT_MERGE_TOKEN }}  # only with a merge stage
