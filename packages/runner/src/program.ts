@@ -35,6 +35,8 @@ export const EXIT = {
 
 /** The outside world of the program: files, output and the adapters. */
 export interface ProgramEnvironment {
+  /** The version of the build that runs, from the root `package.json`, such as `0.1.2`. */
+  readonly version: string;
   readonly variables: Readonly<Record<string, string | undefined>>;
   readFile(path: string): Promise<string | undefined>;
 
@@ -99,6 +101,7 @@ Options:
   --config <path>   The config file (default: ${DEFAULT_CONFIG_PATH})
   --json            Print the report as JSON
   --help            Show this help
+  --version, -v     Print the version
 
 The GitHub token is read from BOARDWRIGHT_GITHUB_TOKEN, GITHUB_TOKEN or GH_TOKEN. It needs read access to the
 board (a classic token needs the project scope for a user's project) and, for once, write access to the
@@ -173,6 +176,10 @@ async function dispatch(
       config: { type: 'string' },
       json: { type: 'boolean' },
       help: { type: 'boolean' },
+      version: {
+        type: 'boolean',
+        short: 'v',
+      },
       'dry-run': { type: 'boolean' },
       interval: { type: 'string' },
       owner: { type: 'string' },
@@ -191,6 +198,12 @@ async function dispatch(
     configPath: typeof values.config === 'string' ? values.config : DEFAULT_CONFIG_PATH,
     json: values.json === true,
   };
+
+  if (values.version === true) {
+    environment.stdout(environment.version);
+
+    return EXIT.ok;
+  }
 
   if (
     values.help === true

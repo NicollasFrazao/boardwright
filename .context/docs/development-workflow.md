@@ -51,7 +51,8 @@ npm run boardwright -- once --dry-run       # what one tick would do; writes not
 npm run boardwright -- run --interval 60    # ticks until Ctrl+C; JSON logs on stderr
 ```
 
-`--config <path>` reads another file; `--json` prints the report as JSON. `once` without `--dry-run` acts:
+`--config <path>` reads another file; `--json` prints the report as JSON; `--version` (or `-v`) prints
+the version of the root `package.json` the CLI was built from, for bug reports. `once` without `--dry-run` acts:
 it needs a token that can write the repositories' contents, issues and pull requests, and an agent
 credential the Agent SDK accepts, such as `ANTHROPIC_API_KEY` (ADR 0004). A config with a merge stage also needs `BOARDWRIGHT_MERGE_TOKEN`, a token other than the one that
 opens pull requests (ADR 0003). Clones and worktrees live in
