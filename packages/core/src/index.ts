@@ -59,6 +59,18 @@ export {
   type ImplementPromptInput,
   type ReviewPromptInput,
 } from './application/prompt.ts';
+export type {
+  BoardAction,
+  BoardEntry,
+} from './application/board-hygiene.ts';
+export {
+  inferFieldValue,
+  issuesNotOnBoard,
+  parentsToStart,
+  type HygieneItem,
+  type ParentRule,
+  type ParentToStart,
+} from './domain/board-hygiene.ts';
 export {
   tick,
   type ExecutionResult,

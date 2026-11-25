@@ -88,6 +88,15 @@ async function checkBoard(dependencies: DoctorDependencies): Promise<DoctorCheck
         'fail',
         `The Status "${status}" is not an option of the board; add it, or change the stage.`,
       )),
+      ...checkHygiene(
+        config,
+        options,
+        board.singleSelectFields ?? {},
+      ).map((problem) => check(
+        subject,
+        problem.status,
+        problem.detail,
+      )),
     ];
   } catch (error) {
     return [check(
@@ -270,6 +279,47 @@ function statusesOf(stage: StageConfig): string[] {
     case 'merge':
       return [stage.when.status];
   }
+}
+
+/**
+ * What board hygiene needs of the board: the Status a parent moves to (without it, every move fails),
+ * the statuses it compares with, and the fields it infers (without them, it skips that field).
+ */
+function checkHygiene(
+  config: PipelineConfig,
+  statuses: ReadonlySet<string>,
+  fields: Readonly<Record<string, readonly string[]>>,
+): Omit<DoctorCheck, 'subject'>[] {
+  const problems: Omit<DoctorCheck, 'subject'>[] = [];
+  const hygiene = config.board;
+
+  if (hygiene.followSubIssues) {
+    if (!statuses.has(hygiene.parents.status)) {
+      problems.push({
+        status: 'fail',
+        detail: `board.parents.status "${hygiene.parents.status}" is not a Status option of the board.`,
+      });
+    }
+
+    for (const status of [
+      ...hygiene.parents.notStarted,
+      ...hygiene.parents.started,
+    ].filter((name) => !statuses.has(name))) {
+      problems.push({
+        status: 'warn',
+        detail: `board.parents lists "${status}", which is not a Status option of the board; no item can match it.`,
+      });
+    }
+  }
+
+  for (const field of hygiene.inferFields.filter((name) => !(name in fields))) {
+    problems.push({
+      status: 'warn',
+      detail: `board.inferFields names "${field}", which is not a single-select field of the board; it is skipped.`,
+    });
+  }
+
+  return problems;
 }
 
 function check(

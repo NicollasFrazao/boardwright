@@ -18,6 +18,7 @@ const ISSUE = {
 };
 
 const REPORT: TickReport = {
+  board: [],
   entries: [
     {
       stage: 'implement',
@@ -165,6 +166,34 @@ describe('daemon helpers', () => {
     expect(summarize(REPORT)).toEqual({
       error: 1,
       skip: 1,
+    });
+  });
+
+  it('counts board hygiene apart from the stages', () => {
+    expect(summarize({
+      board: [
+        {
+          action: {
+            kind: 'add-issue',
+            issue: ISSUE,
+          },
+          result: { kind: 'applied' },
+        },
+        {
+          action: {
+            kind: 'add-issue',
+            issue: ISSUE,
+          },
+          result: {
+            kind: 'error',
+            message: 'denied',
+          },
+        },
+      ],
+      entries: [],
+    })).toEqual({
+      'board.add-issue': 1,
+      error: 1,
     });
   });
 

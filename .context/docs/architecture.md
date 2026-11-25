@@ -65,7 +65,10 @@ core changes, and nothing in one adapter can break another.
 acts. Each action is idempotent, so a tick can be repeated, interrupted or run by two runners without
 doing the work twice:
 
-1. Read the board; for each stage, take the items in its `when` Status.
+1. Read the board and, when the config turns it on, tidy it (`application/board-hygiene.ts`, rules in
+   `domain/board-hygiene.ts`): add new issues, fill inferred fields, move parents whose sub-issues
+   started. Each change is checked against the board as read, so a repeated tick does nothing; if
+   anything changed, the board is read again. Then, for each stage, take the items in its `when` Status.
 2. Plan each item (`packages/core/src/application/tick.ts`): repository allowlist, open issue, trigger
    label added by someone with triage, then the markers decide (`domain/run-decision.ts`): start an
    attempt, wait for a run in flight, repair the Status after a success, or give up.

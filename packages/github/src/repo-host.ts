@@ -195,6 +195,30 @@ const ROLE_PERMISSIONS: ReadonlySet<string> = new Set<RepositoryPermission>([
   'admin',
 ]);
 
+const RECENT_ISSUES_QUERY = `query($owner: String!, $name: String!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 50, after: $after, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
+      pageInfo { hasNextPage endCursor }
+      nodes { number createdAt }
+    }
+  }
+}`;
+
+interface RecentIssuesQuery {
+  readonly repository: {
+    readonly issues: {
+      readonly pageInfo: {
+        readonly hasNextPage: boolean;
+        readonly endCursor: string | null;
+      };
+      readonly nodes: readonly {
+        readonly number: number;
+        readonly createdAt: string;
+      }[];
+    };
+  } | null;
+}
+
 /** Issues, comments, labels, files and pull requests through the GitHub REST API. */
 export class GitHubRepoHost implements RepoHostPort {
   private readonly client: GitHubClient;
@@ -217,6 +241,54 @@ export class GitHubRepoHost implements RepoHostPort {
       labels: data.labels.map((label) => typeof label === 'string' ? label : label.name ?? ''),
       isOpen: data.state === 'open',
     };
+  }
+
+  /**
+   * The open issues created at or after `createdAfter`, newest first.
+   *
+   * @remarks
+   * Reads the newest open issues a page at a time and stops at the first one older than the window, so a
+   * repository with a long backlog costs one request per tick.
+   */
+  async listRecentIssues(
+    repository: string,
+    createdAfter: Date,
+  ): Promise<IssueRef[]> {
+    const {
+      owner,
+      repo,
+    } = splitRepository(repository);
+
+    const recent: IssueRef[] = [];
+    let after: string | null = null;
+
+    do {
+      const data: RecentIssuesQuery = await this.client.graphql<RecentIssuesQuery>(
+        RECENT_ISSUES_QUERY,
+        {
+          owner,
+          name: repo,
+          after,
+        },
+      );
+
+      const issues = data.repository?.issues;
+
+      for (const issue of issues?.nodes ?? []) {
+        if (new Date(issue.createdAt) < createdAfter) {
+          return recent;
+        }
+
+        recent.push({
+          repository,
+          number: issue.number,
+        });
+      }
+
+      after = issues?.pageInfo.hasNextPage === true ? issues.pageInfo.endCursor : null;
+    } while (after !== null);
+
+    return recent;
   }
 
   /**

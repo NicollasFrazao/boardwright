@@ -31,6 +31,12 @@ guardRails:
   maxTurns: 80
   timeoutMinutes: 60
   maxAttempts: 3
+# Board hygiene, before the stages: new issues join the board, take the Track of their repository's
+# other items, and an umbrella issue moves to In Progress once one of its sub-issues starts.
+board:
+  addNewIssues: true
+  inferFields: [Track]
+  followSubIssues: true
 stages:
   # Writes a plan on the issue (read-only session); Refine → Ready, or Todo when the agent needs a person.
   - id: refine

@@ -2,8 +2,12 @@ import type {
   BoardDescription,
   BoardItem,
   BoardPort,
+  IssueRef,
 } from '@boardwright/core';
-import type { GitHubClient } from './client.ts';
+import {
+  splitRepository,
+  type GitHubClient,
+} from './client.ts';
 
 /** Which board to read: its owner (a user or an organization), its number and the Status field's name. */
 export interface ProjectLocation {
@@ -24,6 +28,15 @@ interface Project {
   readonly id: string;
   readonly title: string;
   readonly statusField: StatusField | undefined;
+
+  /** Every single-select field by name; `undefined` when the response did not list them. */
+  readonly singleSelectFields: ReadonlyMap<string, StatusField> | undefined;
+}
+
+interface SingleSelectNode {
+  readonly id?: string;
+  readonly name?: string;
+  readonly options?: StatusField['options'];
 }
 
 interface ProjectQuery {
@@ -35,6 +48,7 @@ interface ProjectQuery {
         readonly id?: string;
         readonly options?: StatusField['options'];
       } | null;
+      readonly fields?: { readonly nodes: readonly (SingleSelectNode | null)[] };
     } | null;
   } | null;
 }
@@ -49,9 +63,19 @@ interface ItemsPage {
       readonly nodes: readonly {
         readonly id: string;
         readonly fieldValueByName: { readonly name?: string } | null;
+        readonly fieldValues?: {
+          readonly nodes: readonly ({
+            readonly name?: string;
+            readonly field?: { readonly name?: string };
+          } | null)[];
+        };
         readonly content: {
           readonly number?: number;
           readonly repository?: { readonly nameWithOwner: string };
+          readonly parent?: {
+            readonly number: number;
+            readonly repository: { readonly nameWithOwner: string };
+          } | null;
         } | null;
       }[];
     };
@@ -65,6 +89,7 @@ const PROJECT_QUERY = `query($login: String!, $number: Int!, $field: String!) {
         id
         title
         field(name: $field) { ... on ProjectV2SingleSelectField { id options { id name } } }
+        fields(first: 50) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } }
       }
     }
   }
@@ -78,7 +103,12 @@ const ITEMS_QUERY = `query($id: ID!, $after: String, $field: String!) {
         nodes {
           id
           fieldValueByName(name: $field) { ... on ProjectV2ItemFieldSingleSelectValue { name } }
-          content { ... on Issue { number repository { nameWithOwner } } }
+          fieldValues(first: 20) {
+            nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } }
+          }
+          content {
+            ... on Issue { number repository { nameWithOwner } parent { number repository { nameWithOwner } } }
+          }
         }
       }
     }
@@ -91,6 +121,22 @@ const SET_STATUS_MUTATION = `mutation($project: ID!, $item: ID!, $field: ID!, $o
     value: { singleSelectOptionId: $option }
   }) { projectV2Item { id } }
 }`;
+
+const ISSUE_ID_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { issue(number: $number) { id } }
+}`;
+
+const ADD_ITEM_MUTATION = `mutation($project: ID!, $content: ID!) {
+  addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } }
+}`;
+
+interface IssueIdQuery {
+  readonly repository: { readonly issue: { readonly id: string } | null } | null;
+}
+
+interface AddItemMutation {
+  readonly addProjectV2ItemById: { readonly item: { readonly id: string } };
+}
 
 /**
  * The board as a GitHub Project (v2), owned by a user or an organization.
@@ -121,6 +167,15 @@ export class ProjectBoard implements BoardPort {
     return {
       title: project.title,
       statusOptions: project.statusField?.options.map((option) => option.name),
+      ...project.singleSelectFields === undefined ? {} : {
+        singleSelectFields: Object.fromEntries([...project.singleSelectFields].map(([
+          name,
+          field,
+        ]) => [
+          name,
+          field.options.map((option) => option.name),
+        ])),
+      },
     };
   }
 
@@ -154,6 +209,7 @@ export class ProjectBoard implements BoardPort {
               repository: issue.repository.nameWithOwner,
               number: issue.number,
             },
+            ...optionalDetails(node),
           });
         }
       }
@@ -162,6 +218,77 @@ export class ProjectBoard implements BoardPort {
     } while (after !== null);
 
     return items;
+  }
+
+  /**
+   * Adds an issue to the board; GitHub returns the existing item when the issue is already there.
+   *
+   * @throws {@link Error} when the issue does not exist or cannot be read with the token.
+   */
+  async addIssue(ref: IssueRef): Promise<string> {
+    const project = await this.load();
+
+    const {
+      owner,
+      repo,
+    } = splitRepository(ref.repository);
+
+    const data = await this.client.graphql<IssueIdQuery>(
+      ISSUE_ID_QUERY,
+      {
+        owner,
+        name: repo,
+        number: ref.number,
+      },
+    );
+
+    const issueId = data.repository?.issue?.id;
+
+    if (issueId === undefined) {
+      throw new Error(`No issue ${ref.repository}#${ref.number}.`);
+    }
+
+    const added = await this.client.graphql<AddItemMutation>(
+      ADD_ITEM_MUTATION,
+      {
+        project: project.id,
+        content: issueId,
+      },
+    );
+
+    return added.addProjectV2ItemById.item.id;
+  }
+
+  /**
+   * Sets a single-select field of an item to an existing option.
+   *
+   * @throws {@link Error} when the board has no such field or the field has no such option.
+   */
+  async setField(
+    itemId: string,
+    field: string,
+    value: string,
+  ): Promise<void> {
+    const project = await this.load();
+    const target = project.singleSelectFields?.get(field);
+    const option = target?.options.find((candidate) => candidate.name === value);
+
+    if (
+      target === undefined
+      || option === undefined
+    ) {
+      throw new Error(`The board has no ${field} option "${value}".`);
+    }
+
+    await this.client.graphql(
+      SET_STATUS_MUTATION,
+      {
+        project: project.id,
+        item: itemId,
+        field: target.id,
+        option: option.id,
+      },
+    );
   }
 
   /**
@@ -235,6 +362,57 @@ export class ProjectBoard implements BoardPort {
         id: field.id,
         options: field.options,
       },
+      singleSelectFields: project.fields === undefined ? undefined : singleSelectFieldsOf(project.fields.nodes),
     };
   }
+}
+
+function singleSelectFieldsOf(nodes: readonly (SingleSelectNode | null)[]): ReadonlyMap<string, StatusField> {
+  const fields = new Map<string, StatusField>();
+
+  for (const node of nodes) {
+    if (
+      node?.id !== undefined
+      && node.name !== undefined
+      && node.options !== undefined
+    ) {
+      fields.set(
+        node.name,
+        {
+          id: node.id,
+          options: node.options,
+        },
+      );
+    }
+  }
+
+  return fields;
+}
+
+/** The single-select values and the parent of an item, when the response has them. */
+function optionalDetails(node: ItemsPage['node']['items']['nodes'][number]): Pick<BoardItem, 'fields' | 'parent'> {
+  const fields: Record<string, string> = {};
+
+  for (const value of node.fieldValues?.nodes ?? []) {
+    const fieldName = value?.field?.name;
+
+    if (
+      fieldName !== undefined
+      && value?.name !== undefined
+    ) {
+      fields[fieldName] = value.name;
+    }
+  }
+
+  const parent = node.content?.parent;
+
+  return {
+    ...Object.keys(fields).length === 0 ? {} : { fields },
+    ...parent === undefined || parent === null ? {} : {
+      parent: {
+        repository: parent.repository.nameWithOwner,
+        number: parent.number,
+      },
+    },
+  };
 }

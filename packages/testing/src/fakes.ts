@@ -75,16 +75,99 @@ export class FakeBoard implements BoardPort {
 
   readonly items: BoardItem[];
 
+  /** The board's single-select fields besides Status, with their options. */
+  singleSelectFields: Record<string, string[]> = {};
+
+  /** Every field change, in order. */
+  readonly fieldChanges: {
+    itemId: string;
+    field: string;
+    value: string;
+  }[] = [];
+
+  /** Issues added, in order. */
+  readonly added: IssueRef[] = [];
+
+  /** Item ids whose next change fails, to play a GitHub error. */
+  readonly failing = new Set<string>();
+
   constructor(items: BoardItem[]) {
     this.items = items;
   }
 
-  /** The title and the Status options the test set. */
+  /** The title, the Status options and the fields the test set. */
   describe(): Promise<BoardDescription> {
     return Promise.resolve({
       title: 'Roadmap',
       statusOptions: this.statusOptions,
+      singleSelectFields: {
+        ...this.statusOptions === undefined ? {} : { Status: this.statusOptions },
+        ...this.singleSelectFields,
+      },
     });
+  }
+
+  /** Adds the issue as a new item without a Status, or returns the item it already has. */
+  addIssue(ref: IssueRef): Promise<string> {
+    const existing = this.items.find((item) => keyOf(item.issue) === keyOf(ref));
+
+    if (existing !== undefined) {
+      return Promise.resolve(existing.itemId);
+    }
+
+    const itemId = `item-${keyOf(ref)}`;
+
+    this.items.push({
+      itemId,
+      status: null,
+      issue: ref,
+    });
+
+    this.added.push(ref);
+
+    return Promise.resolve(itemId);
+  }
+
+  /** Sets a field of an item, refusing an option the board does not have. */
+  setField(
+    itemId: string,
+    field: string,
+    value: string,
+  ): Promise<void> {
+    const index = this.items.findIndex((item) => item.itemId === itemId);
+    const item = this.items[index];
+
+    if (
+      item === undefined
+      || this.failing.has(itemId)
+      || this.singleSelectFields[field]?.includes(value) !== true
+    ) {
+      return Promise.reject(new Error(`Cannot set ${field} to "${value}" on ${itemId}`));
+    }
+
+    this.items[index] = {
+      ...item,
+      fields: {
+        ...item.fields,
+        [field]: value,
+      },
+    };
+
+    this.fieldChanges.push({
+      itemId,
+      field,
+      value,
+    });
+
+    return Promise.resolve();
+  }
+
+  /** The value of an item's field now. */
+  fieldOf(
+    itemId: string,
+    field: string,
+  ): string | undefined {
+    return this.items.find((item) => item.itemId === itemId)?.fields?.[field];
   }
 
   /** A copy of the items. */
@@ -100,7 +183,10 @@ export class FakeBoard implements BoardPort {
     const index = this.items.findIndex((item) => item.itemId === itemId);
     const item = this.items[index];
 
-    if (item === undefined) {
+    if (
+      item === undefined
+      || this.failing.has(itemId)
+    ) {
       return Promise.reject(new Error(`No item ${itemId}`));
     }
 
@@ -156,6 +242,12 @@ export class FakeRepoHost implements RepoHostPort {
   /** Files on the default branch, keyed `owner/name:path`. */
   readonly files = new Map<string, string>();
 
+  /** Open issues per repository with when they were created, for `listRecentIssues`. */
+  readonly recentIssues = new Map<string, {
+    number: number;
+    createdAt: string;
+  }[]>();
+
   /** Called after each comment is stored; a test uses it to play a competing runner. */
   afterComment: ((ref: IssueRef, body: string) => void) | undefined;
 
@@ -165,6 +257,27 @@ export class FakeRepoHost implements RepoHostPort {
 
   constructor(clock: FakeClock) {
     this.clock = clock;
+  }
+
+  /** The open issues the test set that were created at or after `createdAfter`, newest first. */
+  listRecentIssues(
+    repository: string,
+    createdAfter: Date,
+  ): Promise<IssueRef[]> {
+    if (this.unreachable.has(repository)) {
+      return Promise.reject(new Error(`${repository} is unreachable`));
+    }
+
+    return Promise.resolve((this.recentIssues.get(repository) ?? [])
+      .filter((issue) => new Date(issue.createdAt) >= createdAfter)
+      .toSorted((
+        left,
+        right,
+      ) => right.createdAt.localeCompare(left.createdAt))
+      .map((issue) => ({
+        repository,
+        number: issue.number,
+      })));
   }
 
   /** The merge facts the test set; rejects when there are none. */

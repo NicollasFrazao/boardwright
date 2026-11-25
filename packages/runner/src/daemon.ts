@@ -102,6 +102,12 @@ export function summarize(report: TickReport): Record<string, number> {
     counts[kind] = (counts[kind] ?? 0) + 1;
   }
 
+  for (const entry of report.board) {
+    const kind = entry.result?.kind === 'error' ? 'error' : `board.${entry.action.kind}`;
+
+    counts[kind] = (counts[kind] ?? 0) + 1;
+  }
+
   return counts;
 }
 

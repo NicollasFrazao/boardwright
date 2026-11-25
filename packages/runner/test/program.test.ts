@@ -319,7 +319,10 @@ describe('boardwright once --dry-run', () => {
       env,
     );
 
-    expect(JSON.parse(env.out.join('\n'))).toEqual({ entries: [] });
+    expect(JSON.parse(env.out.join('\n'))).toEqual({
+      board: [],
+      entries: [],
+    });
 
     await runProgram(
       [
