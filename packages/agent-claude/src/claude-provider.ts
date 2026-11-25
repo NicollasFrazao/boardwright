@@ -50,9 +50,10 @@ export const DENIED_TOOLS: readonly string[] = [
   'mcp__dotcontext__sync',
 ];
 
-/** The runner's GitHub tokens; the agent's environment never carries them. */
+/** The runner's GitHub tokens, the merge token included; the agent's environment never carries them. */
 export const TOKEN_VARIABLES: readonly string[] = [
   'BOARDWRIGHT_GITHUB_TOKEN',
+  'BOARDWRIGHT_MERGE_TOKEN',
   'GITHUB_TOKEN',
   'GH_TOKEN',
 ];

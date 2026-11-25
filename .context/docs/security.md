@@ -57,7 +57,7 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
   allow them;
 - a `PreToolUse` hook that denies writes to a denied path or outside the worktree, and shell commands that
   push or call `gh`;
-- the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
+- the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `BOARDWRIGHT_MERGE_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
 - only the project's settings (`settingSources: ['project']`), not the machine user's;
 - for a review or a plan, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
   `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments; it
