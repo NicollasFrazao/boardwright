@@ -7465,8 +7465,8 @@ function decideRun(markers, facts, limits) {
     attempt: latest.attempt + 1
   };
 }
-function isClaimWinner(markers, runId, attempt) {
-  const firstClaim = markers.find((marker) => marker.event === "started" && marker.attempt === attempt);
+function isClaimWinner(markers, runId, attempt2) {
+  const firstClaim = markers.find((marker) => marker.event === "started" && marker.attempt === attempt2);
   return firstClaim?.runId === runId;
 }
 function isInFlight(run3, now, staleAfterMs) {
@@ -24194,8 +24194,8 @@ function rewriteKeyNames(ctx) {
       bySchema.set(entry.schema, entry);
   }
   const rewrites = /* @__PURE__ */ new Map();
-  for (const record2 of pendingRecords.get(ctx) ?? []) {
-    const seen = ctx.seen.get(record2);
+  for (const record3 of pendingRecords.get(ctx) ?? []) {
+    const seen = ctx.seen.get(record3);
     const names = (seen?.def ?? seen?.schema)?.propertyNames;
     if (!names || names === true || rewrites.has(names))
       continue;
@@ -27288,10 +27288,11 @@ var limitsOverride = {
   timeoutMinutes: external_exports.int().positive().optional(),
   maxAttempts: external_exports.int().positive().optional()
 };
+var IN_PROGRESS = "In Progress";
 var implementStage = external_exports.object({
   id: external_exports.literal("implement"),
   when: external_exports.object({ status: statusName }).prefault({ status: "Ready" }),
-  claim: external_exports.object({ status: statusName }).prefault({ status: "In Progress" }),
+  claim: external_exports.object({ status: statusName }).prefault({ status: IN_PROGRESS }),
   done: external_exports.object({ status: statusName }).prefault({ status: "In review" }),
   blocked: external_exports.object({ status: statusName }).prefault({ status: "Todo" }),
   context: external_exports.object({
@@ -27395,6 +27396,27 @@ var stage = external_exports.discriminatedUnion(
     mergeStage
   ]
 );
+var DEFAULT_NEW_ISSUE_WINDOW_DAYS = 2;
+var boardHygiene = external_exports.object({
+  /** Adds the open issues of the allowlisted repositories created in the window that are not on the board. */
+  addNewIssues: external_exports.boolean().default(false),
+  newIssueWindowDays: external_exports.int().positive().default(DEFAULT_NEW_ISSUE_WINDOW_DAYS),
+  /** Single-select fields an item without a value takes from its repository's other items (the most common value). */
+  inferFields: external_exports.array(external_exports.string().min(1)).default([]),
+  /** Moves a parent issue that has not started once one of its sub-issues has. */
+  followSubIssues: external_exports.boolean().default(false),
+  parents: external_exports.object({
+    notStarted: external_exports.array(statusName).default([
+      "Todo",
+      "Ready"
+    ]),
+    started: external_exports.array(statusName).default([
+      IN_PROGRESS,
+      "In review"
+    ]),
+    status: statusName.default(IN_PROGRESS)
+  }).strict().prefault({})
+}).strict();
 var pipelineConfigSchema = external_exports.object({
   project: external_exports.object({
     owner: external_exports.string().min(1),
@@ -27424,6 +27446,7 @@ var pipelineConfigSchema = external_exports.object({
     timeoutMinutes: external_exports.int().positive().default(DEFAULT_TIMEOUT_MINUTES),
     maxAttempts: external_exports.int().positive().default(DEFAULT_MAX_ATTEMPTS)
   }).strict().prefault({}),
+  board: boardHygiene.prefault({}),
   stages: external_exports.array(stage).min(1).refine(
     (stages) => new Set(stages.map((entry) => entry.id)).size === stages.length,
     "each stage may appear once"
@@ -27811,6 +27834,259 @@ function outcome(event, detail) {
     detail,
     pullRequest: void 0
   };
+}
+
+// packages/core/src/domain/board-hygiene.ts
+function inferFieldValue(items, item, field) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const other of items) {
+    const value = other.fields[field];
+    if (other.itemId !== item.itemId && other.issue.repository === item.issue.repository && value !== void 0) {
+      counts.set(
+        value,
+        (counts.get(value) ?? 0) + 1
+      );
+    }
+  }
+  const [best] = [...counts].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return best?.[0];
+}
+function parentsToStart(items, rule) {
+  const byIssue = new Map(items.map((item) => [
+    formatIssueRef(item.issue),
+    item
+  ]));
+  const found = /* @__PURE__ */ new Map();
+  for (const child of items) {
+    const parent = child.parent === void 0 ? void 0 : byIssue.get(formatIssueRef(child.parent));
+    if (parent !== void 0 && child.status !== null && rule.started.includes(child.status) && hasNotStarted(
+      parent,
+      rule
+    ) && !found.has(parent.itemId)) {
+      found.set(
+        parent.itemId,
+        {
+          parent,
+          child: child.issue
+        }
+      );
+    }
+  }
+  return [...found.values()];
+}
+function hasNotStarted(item, rule) {
+  return item.status === null || rule.notStarted.includes(item.status);
+}
+function issuesNotOnBoard(items, recent) {
+  const onBoard = new Set(items.map((item) => formatIssueRef(item.issue)));
+  return recent.filter((ref) => !onBoard.has(formatIssueRef(ref)));
+}
+
+// packages/core/src/application/board-hygiene.ts
+var MS_PER_DAY = 864e5;
+async function tidyBoard(dependencies, items, options) {
+  const pass = {
+    dependencies,
+    dryRun: options.dryRun,
+    entries: [],
+    items: items.map(toHygieneItem)
+  };
+  const hygiene = dependencies.config.board;
+  if (hygiene.addNewIssues) {
+    await addNewIssues(pass);
+  }
+  for (const field of await knownFields(
+    dependencies,
+    hygiene.inferFields
+  )) {
+    await inferField(
+      pass,
+      field
+    );
+  }
+  if (hygiene.followSubIssues) {
+    await startParents(pass);
+  }
+  return {
+    entries: pass.entries,
+    hasChanges: pass.entries.some((entry) => entry.result?.kind === "applied")
+  };
+}
+function toHygieneItem(item) {
+  return {
+    itemId: item.itemId,
+    status: item.status,
+    issue: item.issue,
+    fields: item.fields ?? {},
+    parent: item.parent
+  };
+}
+async function addNewIssues(pass) {
+  const {
+    config: config2,
+    repoHost,
+    clock
+  } = pass.dependencies;
+  const createdAfter = new Date(clock.now().getTime() - config2.board.newIssueWindowDays * MS_PER_DAY);
+  for (const repository of config2.repositories) {
+    const recent = await attempt(
+      pass,
+      () => repoHost.listRecentIssues(
+        repository,
+        createdAfter
+      )
+    );
+    for (const issue2 of issuesNotOnBoard(
+      pass.items,
+      recent.isOk ? recent.value : []
+    )) {
+      let itemId = `planned:${formatIssueRef(issue2)}`;
+      const isOnBoard = await record2(
+        pass,
+        {
+          kind: "add-issue",
+          issue: issue2
+        },
+        async () => {
+          itemId = await pass.dependencies.board.addIssue(issue2);
+        }
+      );
+      if (isOnBoard || pass.dryRun) {
+        pass.items.push({
+          itemId,
+          status: null,
+          issue: issue2,
+          fields: {},
+          parent: void 0
+        });
+      }
+    }
+  }
+}
+async function knownFields(dependencies, fields) {
+  if (fields.length === 0) {
+    return fields;
+  }
+  const available = (await dependencies.board.describe()).singleSelectFields ?? {};
+  return fields.filter((field) => {
+    const isKnown = field in available;
+    if (!isKnown) {
+      dependencies.logger.warn(
+        "board.field-missing",
+        { field }
+      );
+    }
+    return isKnown;
+  });
+}
+async function inferField(pass, field) {
+  for (const [
+    index,
+    item
+  ] of pass.items.entries()) {
+    const value = item.fields[field] === void 0 ? inferFieldValue(
+      pass.items,
+      item,
+      field
+    ) : void 0;
+    if (value === void 0) {
+      continue;
+    }
+    const isApplied = await record2(
+      pass,
+      {
+        kind: "set-field",
+        issue: item.issue,
+        field,
+        value
+      },
+      () => pass.dependencies.board.setField(
+        item.itemId,
+        field,
+        value
+      )
+    );
+    if (isApplied || pass.dryRun) {
+      pass.items[index] = {
+        ...item,
+        fields: {
+          ...item.fields,
+          [field]: value
+        }
+      };
+    }
+  }
+}
+async function startParents(pass) {
+  const rule = pass.dependencies.config.board.parents;
+  for (const {
+    parent,
+    child
+  } of parentsToStart(
+    pass.items,
+    rule
+  )) {
+    await record2(
+      pass,
+      {
+        kind: "start-parent",
+        issue: parent.issue,
+        child,
+        status: rule.status
+      },
+      () => pass.dependencies.board.setStatus(
+        parent.itemId,
+        rule.status
+      )
+    );
+  }
+}
+async function record2(pass, action, apply) {
+  if (pass.dryRun) {
+    pass.entries.push({
+      action,
+      result: void 0
+    });
+    return false;
+  }
+  const outcome6 = await attempt(
+    pass,
+    apply
+  );
+  pass.entries.push({
+    action,
+    result: outcome6.isOk ? { kind: "applied" } : {
+      kind: "error",
+      message: outcome6.message
+    }
+  });
+  pass.dependencies.logger.info(
+    "board.action",
+    {
+      action,
+      issue: formatIssueRef(action.issue),
+      result: outcome6.isOk ? "applied" : "error"
+    }
+  );
+  return outcome6.isOk;
+}
+async function attempt(pass, run3) {
+  try {
+    return {
+      isOk: true,
+      value: await run3()
+    };
+  } catch (error62) {
+    const message = error62 instanceof Error ? error62.message : String(error62);
+    pass.dependencies.logger.warn(
+      "board.error",
+      { message }
+    );
+    return {
+      isOk: false,
+      message
+    };
+  }
 }
 
 // packages/core/src/application/feedback-stage.ts
@@ -28726,7 +29002,13 @@ function movingStatusAfter(stage2, event) {
 
 // packages/core/src/application/tick.ts
 async function tick(dependencies, options = { dryRun: false }) {
-  const items = await dependencies.board.listItems();
+  const listed = await dependencies.board.listItems();
+  const hygiene = await tidyBoard(
+    dependencies,
+    listed,
+    { dryRun: options.dryRun }
+  );
+  const items = hygiene.hasChanges ? await dependencies.board.listItems() : listed;
   const entries = [];
   const slots = { remaining: dependencies.config.concurrency };
   for (const config2 of dependencies.config.stages) {
@@ -28749,7 +29031,10 @@ async function tick(dependencies, options = { dryRun: false }) {
       ));
     }
   }
-  return { entries };
+  return {
+    board: hygiene.entries,
+    entries
+  };
 }
 async function handleItem(dependencies, stage2, item, state) {
   const planned = await planSafely(
@@ -29138,6 +29423,15 @@ async function checkBoard(dependencies) {
         subject,
         "fail",
         `The Status "${status}" is not an option of the board; add it, or change the stage.`
+      )),
+      ...checkHygiene(
+        config2,
+        options,
+        board.singleSelectFields ?? {}
+      ).map((problem) => check2(
+        subject,
+        problem.status,
+        problem.detail
       ))
     ];
   } catch (error62) {
@@ -29281,6 +29575,34 @@ function statusesOf(stage2) {
     case "merge":
       return [stage2.when.status];
   }
+}
+function checkHygiene(config2, statuses, fields) {
+  const problems = [];
+  const hygiene = config2.board;
+  if (hygiene.followSubIssues) {
+    if (!statuses.has(hygiene.parents.status)) {
+      problems.push({
+        status: "fail",
+        detail: `board.parents.status "${hygiene.parents.status}" is not a Status option of the board.`
+      });
+    }
+    for (const status of [
+      ...hygiene.parents.notStarted,
+      ...hygiene.parents.started
+    ].filter((name) => !statuses.has(name))) {
+      problems.push({
+        status: "warn",
+        detail: `board.parents lists "${status}", which is not a Status option of the board; no item can match it.`
+      });
+    }
+  }
+  for (const field of hygiene.inferFields.filter((name) => !(name in fields))) {
+    problems.push({
+      status: "warn",
+      detail: `board.inferFields names "${field}", which is not a single-select field of the board; it is skipped.`
+    });
+  }
+  return problems;
 }
 function check2(subject, status, detail) {
   return {
@@ -34038,6 +34360,7 @@ var PROJECT_QUERY = `query($login: String!, $number: Int!, $field: String!) {
         id
         title
         field(name: $field) { ... on ProjectV2SingleSelectField { id options { id name } } }
+        fields(first: 50) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } }
       }
     }
   }
@@ -34050,7 +34373,12 @@ var ITEMS_QUERY = `query($id: ID!, $after: String, $field: String!) {
         nodes {
           id
           fieldValueByName(name: $field) { ... on ProjectV2ItemFieldSingleSelectValue { name } }
-          content { ... on Issue { number repository { nameWithOwner } } }
+          fieldValues(first: 20) {
+            nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } }
+          }
+          content {
+            ... on Issue { number repository { nameWithOwner } parent { number repository { nameWithOwner } } }
+          }
         }
       }
     }
@@ -34061,6 +34389,12 @@ var SET_STATUS_MUTATION = `mutation($project: ID!, $item: ID!, $field: ID!, $opt
     projectId: $project, itemId: $item, fieldId: $field,
     value: { singleSelectOptionId: $option }
   }) { projectV2Item { id } }
+}`;
+var ISSUE_ID_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { issue(number: $number) { id } }
+}`;
+var ADD_ITEM_MUTATION = `mutation($project: ID!, $content: ID!) {
+  addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } }
 }`;
 var ProjectBoard = class {
   project;
@@ -34075,7 +34409,16 @@ var ProjectBoard = class {
     const project = await this.load();
     return {
       title: project.title,
-      statusOptions: project.statusField?.options.map((option) => option.name)
+      statusOptions: project.statusField?.options.map((option) => option.name),
+      ...project.singleSelectFields === void 0 ? {} : {
+        singleSelectFields: Object.fromEntries([...project.singleSelectFields].map(([
+          name,
+          field
+        ]) => [
+          name,
+          field.options.map((option) => option.name)
+        ]))
+      }
     };
   }
   /** Every item whose content is an issue, across all pages. */
@@ -34101,13 +34444,68 @@ var ProjectBoard = class {
             issue: {
               repository: issue2.repository.nameWithOwner,
               number: issue2.number
-            }
+            },
+            ...optionalDetails(node2)
           });
         }
       }
       after = page.node.items.pageInfo.hasNextPage ? page.node.items.pageInfo.endCursor : null;
     } while (after !== null);
     return items;
+  }
+  /**
+   * Adds an issue to the board; GitHub returns the existing item when the issue is already there.
+   *
+   * @throws {@link Error} when the issue does not exist or cannot be read with the token.
+   */
+  async addIssue(ref) {
+    const project = await this.load();
+    const {
+      owner,
+      repo
+    } = splitRepository(ref.repository);
+    const data = await this.client.graphql(
+      ISSUE_ID_QUERY,
+      {
+        owner,
+        name: repo,
+        number: ref.number
+      }
+    );
+    const issueId = data.repository?.issue?.id;
+    if (issueId === void 0) {
+      throw new Error(`No issue ${ref.repository}#${ref.number}.`);
+    }
+    const added = await this.client.graphql(
+      ADD_ITEM_MUTATION,
+      {
+        project: project.id,
+        content: issueId
+      }
+    );
+    return added.addProjectV2ItemById.item.id;
+  }
+  /**
+   * Sets a single-select field of an item to an existing option.
+   *
+   * @throws {@link Error} when the board has no such field or the field has no such option.
+   */
+  async setField(itemId, field, value) {
+    const project = await this.load();
+    const target = project.singleSelectFields?.get(field);
+    const option = target?.options.find((candidate) => candidate.name === value);
+    if (target === void 0 || option === void 0) {
+      throw new Error(`The board has no ${field} option "${value}".`);
+    }
+    await this.client.graphql(
+      SET_STATUS_MUTATION,
+      {
+        project: project.id,
+        item: itemId,
+        field: target.id,
+        option: option.id
+      }
+    );
   }
   /**
    * Moves an item to an existing Status option.
@@ -34160,10 +34558,45 @@ var ProjectBoard = class {
       statusField: field?.id === void 0 || field.options === void 0 ? void 0 : {
         id: field.id,
         options: field.options
-      }
+      },
+      singleSelectFields: project.fields === void 0 ? void 0 : singleSelectFieldsOf(project.fields.nodes)
     };
   }
 };
+function singleSelectFieldsOf(nodes) {
+  const fields = /* @__PURE__ */ new Map();
+  for (const node2 of nodes) {
+    if (node2?.id !== void 0 && node2.name !== void 0 && node2.options !== void 0) {
+      fields.set(
+        node2.name,
+        {
+          id: node2.id,
+          options: node2.options
+        }
+      );
+    }
+  }
+  return fields;
+}
+function optionalDetails(node2) {
+  const fields = {};
+  for (const value of node2.fieldValues?.nodes ?? []) {
+    const fieldName = value?.field?.name;
+    if (fieldName !== void 0 && value?.name !== void 0) {
+      fields[fieldName] = value.name;
+    }
+  }
+  const parent = node2.content?.parent;
+  return {
+    ...Object.keys(fields).length === 0 ? {} : { fields },
+    ...parent === void 0 || parent === null ? {} : {
+      parent: {
+        repository: parent.repository.nameWithOwner,
+        number: parent.number
+      }
+    }
+  };
+}
 
 // packages/github/src/repo-host.ts
 var FEEDBACK_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
@@ -34256,6 +34689,14 @@ var ROLE_PERMISSIONS = /* @__PURE__ */ new Set([
   "maintain",
   "admin"
 ]);
+var RECENT_ISSUES_QUERY = `query($owner: String!, $name: String!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 50, after: $after, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
+      pageInfo { hasNextPage endCursor }
+      nodes { number createdAt }
+    }
+  }
+}`;
 var GitHubRepoHost = class {
   client;
   constructor(client) {
@@ -34274,6 +34715,43 @@ var GitHubRepoHost = class {
       labels: data.labels.map((label) => typeof label === "string" ? label : label.name ?? ""),
       isOpen: data.state === "open"
     };
+  }
+  /**
+   * The open issues created at or after `createdAfter`, newest first.
+   *
+   * @remarks
+   * Reads the newest open issues a page at a time and stops at the first one older than the window, so a
+   * repository with a long backlog costs one request per tick.
+   */
+  async listRecentIssues(repository, createdAfter) {
+    const {
+      owner,
+      repo
+    } = splitRepository(repository);
+    const recent = [];
+    let after = null;
+    do {
+      const data = await this.client.graphql(
+        RECENT_ISSUES_QUERY,
+        {
+          owner,
+          name: repo,
+          after
+        }
+      );
+      const issues = data.repository?.issues;
+      for (const issue2 of issues?.nodes ?? []) {
+        if (new Date(issue2.createdAt) < createdAfter) {
+          return recent;
+        }
+        recent.push({
+          repository,
+          number: issue2.number
+        });
+      }
+      after = issues?.pageInfo.hasNextPage === true ? issues.pageInfo.endCursor : null;
+    } while (after !== null);
+    return recent;
   }
   /**
    * The person who most recently added the label, read from the issue's events, with their role.
@@ -34668,6 +35146,10 @@ function summarize(report) {
     const kind = entry.result?.kind === "error" ? "error" : entry.action.kind;
     counts[kind] = (counts[kind] ?? 0) + 1;
   }
+  for (const entry of report.board) {
+    const kind = entry.result?.kind === "error" ? "error" : `board.${entry.action.kind}`;
+    counts[kind] = (counts[kind] ?? 0) + 1;
+  }
   return counts;
 }
 async function sleep(ms, signal) {
@@ -34708,7 +35190,7 @@ async function acquireFileLock(path, pid = process.pid, isAlive = isProcessAlive
     dirname(path),
     { recursive: true }
   );
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt2 = 0; attempt2 < 2; attempt2 += 1) {
     if (await create(
       path,
       pid
@@ -35082,15 +35564,18 @@ function formatDoctor(report) {
 }
 function formatTick(report, isDryRun) {
   const footer = isDryRun ? "Dry run: nothing was written." : "Done.";
-  if (report.entries.length === 0) {
+  if (report.entries.length === 0 && report.board.length === 0) {
     return `Nothing to do: no item is in a Status a stage starts from.
 
 ${footer}`;
   }
-  const lines2 = report.entries.map((entry) => {
-    const plan = `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`;
-    return entry.result === void 0 ? plan : `${plan} \u2192 ${describeResult(entry.result)}`;
-  });
+  const lines2 = [
+    ...report.board.map(describeBoardEntry),
+    ...report.entries.map((entry) => {
+      const plan = `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`;
+      return entry.result === void 0 ? plan : `${plan} \u2192 ${describeResult(entry.result)}`;
+    })
+  ];
   lines2.push(
     "",
     footer
@@ -35121,6 +35606,24 @@ function describeResult(result) {
       return `${result.outcome.event}: ${result.outcome.detail.split("\n")[0] ?? ""}`;
     case "error":
       return `error: ${result.message}`;
+  }
+}
+function describeBoardEntry(entry) {
+  const plan = `board  ${entry.action.issue.repository}#${entry.action.issue.number}  ${describeBoardAction(entry.action)}`;
+  if (entry.result === void 0) {
+    return plan;
+  }
+  const outcome6 = entry.result.kind === "applied" ? "done" : `error: ${entry.result.message}`;
+  return `${plan} \u2192 ${outcome6}`;
+}
+function describeBoardAction(action) {
+  switch (action.kind) {
+    case "add-issue":
+      return "add to the board";
+    case "set-field":
+      return `set ${action.field} to "${action.value}"`;
+    case "start-parent":
+      return `move to "${action.status}": sub-issue ${action.child.repository}#${action.child.number} started`;
   }
 }
 

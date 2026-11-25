@@ -1,4 +1,6 @@
 import type {
+  BoardAction,
+  BoardEntry,
   DoctorReport,
   ExecutionResult,
   PlannedAction,
@@ -40,15 +42,21 @@ export function formatTick(
 ): string {
   const footer = isDryRun ? 'Dry run: nothing was written.' : 'Done.';
 
-  if (report.entries.length === 0) {
+  if (
+    report.entries.length === 0
+    && report.board.length === 0
+  ) {
     return `Nothing to do: no item is in a Status a stage starts from.\n\n${footer}`;
   }
 
-  const lines = report.entries.map((entry) => {
-    const plan = `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`;
+  const lines = [
+    ...report.board.map(describeBoardEntry),
+    ...report.entries.map((entry) => {
+      const plan = `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`;
 
-    return entry.result === undefined ? plan : `${plan} → ${describeResult(entry.result)}`;
-  });
+      return entry.result === undefined ? plan : `${plan} → ${describeResult(entry.result)}`;
+    }),
+  ];
 
   lines.push(
     '',
@@ -83,5 +91,28 @@ function describeResult(result: ExecutionResult): string {
       return `${result.outcome.event}: ${result.outcome.detail.split('\n')[0] ?? ''}`;
     case 'error':
       return `error: ${result.message}`;
+  }
+}
+
+function describeBoardEntry(entry: BoardEntry): string {
+  const plan = `board  ${entry.action.issue.repository}#${entry.action.issue.number}  ${describeBoardAction(entry.action)}`;
+
+  if (entry.result === undefined) {
+    return plan;
+  }
+
+  const outcome = entry.result.kind === 'applied' ? 'done' : `error: ${entry.result.message}`;
+
+  return `${plan} → ${outcome}`;
+}
+
+function describeBoardAction(action: BoardAction): string {
+  switch (action.kind) {
+    case 'add-issue':
+      return 'add to the board';
+    case 'set-field':
+      return `set ${action.field} to "${action.value}"`;
+    case 'start-parent':
+      return `move to "${action.status}": sub-issue ${action.child.repository}#${action.child.number} started`;
   }
 }

@@ -34,6 +34,24 @@ describe('parsePipelineConfig', () => {
       maxAttempts: 3,
     });
 
+    expect(config.board).toEqual({
+      addNewIssues: false,
+      newIssueWindowDays: 2,
+      inferFields: [],
+      followSubIssues: false,
+      parents: {
+        notStarted: [
+          'Todo',
+          'Ready',
+        ],
+        started: [
+          'In Progress',
+          'In review',
+        ],
+        status: 'In Progress',
+      },
+    });
+
     expect(config.stages[0]).toEqual({
       id: 'implement',
       when: { status: 'Ready' },

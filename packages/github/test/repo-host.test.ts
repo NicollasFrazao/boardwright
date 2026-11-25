@@ -1,5 +1,6 @@
 import {
   GitHubReplay,
+  graphqlVariables,
   type ReplayRoute,
 } from '@boardwright/testing';
 import {
@@ -827,5 +828,103 @@ describe('GitHubRepoHost: feedback', () => {
     await host.resolveThread('PRRT_1');
 
     expect(replay.nth(0).body).toMatchObject({ variables: { id: 'PRRT_1' } });
+  });
+});
+
+describe('GitHubRepoHost: recent issues', () => {
+  function recentPage(
+    after: string | null,
+    nodes: unknown[],
+    endCursor: string | null,
+  ): ReplayRoute {
+    return {
+      method: 'POST',
+      path: '/graphql',
+      query: 'orderBy: { field: CREATED_AT, direction: DESC }',
+      when: (request) => graphqlVariables(request).after === after,
+      body: {
+        data: {
+          repository: {
+            issues: {
+              pageInfo: {
+                hasNextPage: endCursor !== null,
+                endCursor,
+              },
+              nodes,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  it('reads the newest open issues across pages and stops at the first one older than the window', async () => {
+    const {
+      host,
+      replay,
+    } = hostWith([
+      recentPage(
+        null,
+        [
+          {
+            number: 12,
+            createdAt: '2026-11-24T10:00:00Z',
+          },
+        ],
+        'cursor-1',
+      ),
+      recentPage(
+        'cursor-1',
+        [
+          {
+            number: 11,
+            createdAt: '2026-11-23T10:00:00Z',
+          },
+          {
+            number: 4,
+            createdAt: '2026-10-01T10:00:00Z',
+          },
+        ],
+        'cursor-2',
+      ),
+    ]);
+
+    expect(await host.listRecentIssues(
+      'acme/app',
+      new Date('2026-11-22T12:00:00Z'),
+    )).toEqual([
+      {
+        repository: 'acme/app',
+        number: 12,
+      },
+      {
+        repository: 'acme/app',
+        number: 11,
+      },
+    ]);
+
+    expect(replay.requests).toHaveLength(2);
+
+    expect(graphqlVariables(replay.nth(0))).toEqual({
+      owner: 'acme',
+      name: 'app',
+      after: null,
+    });
+  });
+
+  it('returns nothing for a repository without open issues or that it cannot read', async () => {
+    const { host } = hostWith([
+      {
+        method: 'POST',
+        path: '/graphql',
+        query: 'orderBy',
+        body: { data: { repository: null } },
+      },
+    ]);
+
+    expect(await host.listRecentIssues(
+      'acme/app',
+      new Date('2026-11-22T12:00:00Z'),
+    )).toEqual([]);
   });
 });

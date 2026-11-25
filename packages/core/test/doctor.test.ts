@@ -178,4 +178,39 @@ describe('diagnose', () => {
       'warn',
     )).toContain('acme/app implement: No agent instructions in the repository.');
   });
+
+  it('checks what board hygiene needs: the parent Status fails, unknown statuses and fields warn', async () => {
+    const world = scenario(baseConfig({
+      board: {
+        followSubIssues: true,
+        inferFields: [
+          'Track',
+          'Area',
+        ],
+        parents: {
+          notStarted: ['Backlog'],
+          status: 'Doing',
+        },
+      },
+    }));
+
+    world.board.singleSelectFields = { Track: ['Showcase'] };
+
+    const report = await run(world);
+
+    expect(report.hasFailures).toBe(true);
+
+    expect(lines(
+      report.checks,
+      'fail',
+    )).toEqual(['board acme#3: board.parents.status "Doing" is not a Status option of the board.']);
+
+    expect(lines(
+      report.checks,
+      'warn',
+    )).toEqual([
+      'board acme#3: board.parents lists "Backlog", which is not a Status option of the board; no item can match it.',
+      'board acme#3: board.inferFields names "Area", which is not a single-select field of the board; it is skipped.',
+    ]);
+  });
 });

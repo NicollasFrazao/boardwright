@@ -14,6 +14,7 @@ const issue = {
 describe('formatTick', () => {
   it('describes every kind of action in one line each', () => {
     const report: TickReport = {
+      board: [],
       entries: [
         {
           kind: 'run',
@@ -71,6 +72,7 @@ describe('formatTick', () => {
     });
 
     const report: TickReport = {
+      board: [],
       entries: [
         entry({
           kind: 'completed',
@@ -97,6 +99,56 @@ describe('formatTick', () => {
       'implement  acme/app#7  run attempt 1 → another runner claimed it first',
       'implement  acme/app#7  run attempt 1 → done',
       'implement  acme/app#7  run attempt 1 → error: GitHub is down',
+      '',
+      'Done.',
+    ]);
+  });
+
+  it('puts board hygiene first, with its result', () => {
+    const report: TickReport = {
+      board: [
+        {
+          action: {
+            kind: 'add-issue',
+            issue,
+          },
+          result: { kind: 'applied' },
+        },
+        {
+          action: {
+            kind: 'set-field',
+            issue,
+            field: 'Track',
+            value: 'Showcase',
+          },
+          result: {
+            kind: 'error',
+            message: 'no such option',
+          },
+        },
+        {
+          action: {
+            kind: 'start-parent',
+            issue,
+            child: {
+              repository: 'acme/app',
+              number: 8,
+            },
+            status: 'In Progress',
+          },
+          result: undefined,
+        },
+      ],
+      entries: [],
+    };
+
+    expect(formatTick(
+      report,
+      false,
+    ).split('\n')).toEqual([
+      'board  acme/app#7  add to the board → done',
+      'board  acme/app#7  set Track to "Showcase" → error: no such option',
+      'board  acme/app#7  move to "In Progress": sub-issue acme/app#8 started',
       '',
       'Done.',
     ]);

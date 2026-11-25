@@ -17,6 +17,10 @@ import {
   type RunMarker,
 } from '../domain/run-marker.ts';
 import {
+  tidyBoard,
+  type BoardEntry,
+} from './board-hygiene.ts';
+import {
   stageLimits,
   type PipelineConfig,
   type StageConfig,
@@ -113,6 +117,8 @@ export interface TickEntry {
 
 /** Everything a tick decided and did, in order. */
 export interface TickReport {
+  /** What board hygiene changed before the stages ran. */
+  readonly board: readonly BoardEntry[];
   readonly entries: readonly TickEntry[];
 }
 
@@ -133,8 +139,8 @@ interface StageInTick {
 }
 
 /**
- * One pass of the reconciliation loop: for each stage, the items in its `when` Status are planned and,
- * unless it is a dry run, acted on.
+ * One pass of the reconciliation loop: board hygiene first, when the config turns it on, then, for each
+ * stage, the items in its `when` Status are planned and, unless it is a dry run, acted on.
  *
  * @remarks
  * Every action is safe to repeat. At most `concurrency` runs start per tick; the rest are reported as
@@ -144,7 +150,16 @@ export async function tick(
   dependencies: TickDependencies,
   options: TickOptions = { dryRun: false },
 ): Promise<TickReport> {
-  const items = await dependencies.board.listItems();
+  const listed = await dependencies.board.listItems();
+
+  const hygiene = await tidyBoard(
+    dependencies,
+    listed,
+    { dryRun: options.dryRun },
+  );
+
+  // The stages see the board as hygiene left it: a parent it moved is no longer where it was.
+  const items = hygiene.hasChanges ? await dependencies.board.listItems() : listed;
   const entries: TickEntry[] = [];
   const slots = { remaining: dependencies.config.concurrency };
 
@@ -170,7 +185,10 @@ export async function tick(
     }
   }
 
-  return { entries };
+  return {
+    board: hygiene.entries,
+    entries,
+  };
 }
 
 async function handleItem(

@@ -26,6 +26,7 @@ the people who could have made the change themselves.
 | A token with bypass rights skips the ruleset | Tokens need no bypass; the docs require tokens without it |
 | Runaway cost or loops | `maxTurns`, timeout and `maxAttempts` per stage; one run per item |
 | Two runners act on the same item | The claim marker and idempotent actions |
+| Anyone who can open an issue gets it onto the board (`board.addNewIssues`) | Being on the board releases nothing: a stage still needs the trigger label, added by someone with triage access; hygiene only adds items, fills fields from the repository's own items and moves parents, never runs an agent |
 
 ## Authentication & Authorization
 

@@ -154,9 +154,35 @@ guardRails:
   maxTurns: 80                   # per run
   timeoutMinutes: 60             # per run
   maxAttempts: 3                 # per stage and issue, before the pipeline gives up
+board:                           # board hygiene, before the stages; every part off by default
+  addNewIssues: false            # add the open issues created in the last newIssueWindowDays
+  newIssueWindowDays: 2
+  inferFields: []                # e.g. [Track]: single-select fields to fill from the repository's other items
+  followSubIssues: false         # move a parent that has not started once a sub-issue has
+  parents:
+    notStarted: [Todo, Ready]    # an empty Status counts too
+    started: [In Progress, In review]
+    status: In Progress
 stages:                          # required: at least one, each id at most once
   - id: implement
 ```
+
+### Board hygiene
+
+What a person or a board workflow would otherwise do by hand, run at the start of every tick and shown
+by `once --dry-run`. No agent is involved, and each part is safe to repeat:
+
+- **`addNewIssues`** adds the open issues of the allowlisted repositories that were created in the last
+  `newIssueWindowDays` and are not on the board. Older issues are never added, so turning it on does not
+  pull in a backlog.
+- **`inferFields`** fills an empty single-select field (such as `Track`) with the most common value among
+  the other items of the same repository, the first by name on a tie. An item whose repository has no
+  valued item is left alone, and so is any field that already has a value.
+- **`followSubIssues`** moves a parent issue whose Status is empty or `notStarted` to `status` once one of
+  its sub-issues is `started`, so an umbrella card follows its children.
+
+Moving a labelled issue to Ready stays with a person: releasing work to an agent is a decision, not
+hygiene.
 
 ### Stages
 

@@ -11,6 +11,12 @@ export interface BoardItem {
   readonly itemId: string;
   readonly status: string | null;
   readonly issue: IssueRef;
+
+  /** The item's single-select values by field name; absent when the adapter read none. */
+  readonly fields?: Readonly<Record<string, string>>;
+
+  /** The issue's parent, when it is a sub-issue. */
+  readonly parent?: IssueRef;
 }
 
 /** The board: a GitHub Project (v2) and its Status field. */
@@ -23,6 +29,12 @@ export interface BoardPort {
 
   /** Moves an item to a Status option that already exists on the board. */
   setStatus(itemId: string, status: string): Promise<void>;
+
+  /** Adds an issue to the board, or finds its item when it is already there; resolves the item's id. */
+  addIssue(ref: IssueRef): Promise<string>;
+
+  /** Sets a single-select field of an item to an option that already exists on the board. */
+  setField(itemId: string, field: string, value: string): Promise<void>;
 }
 
 /** What `doctor` checks the config against. */
@@ -31,6 +43,9 @@ export interface BoardDescription {
 
   /** The options of the Status field; `undefined` when the board has no field with the configured name. */
   readonly statusOptions: readonly string[] | undefined;
+
+  /** Every single-select field of the board with its options, by name; absent when the adapter read none. */
+  readonly singleSelectFields?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** An issue as the pipeline needs it. */
@@ -124,6 +139,9 @@ export interface PullRequestDraft {
 /** Issues, comments and pull requests on the repository host. */
 export interface RepoHostPort {
   getIssue(ref: IssueRef): Promise<Issue>;
+
+  /** The open issues of a repository created at or after `createdAfter`, newest first. */
+  listRecentIssues(repository: string, createdAfter: Date): Promise<IssueRef[]>;
 
   /** The person who most recently added `label` to the issue; `undefined` when unknown. */
   findLabelActor(ref: IssueRef, label: string): Promise<LabelActor | undefined>;

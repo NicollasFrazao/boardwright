@@ -38,10 +38,13 @@ const limitsOverride = {
   maxAttempts: z.int().positive().optional(),
 };
 
+/** Where the implement stage claims an item, and where board hygiene moves a parent that started. */
+const IN_PROGRESS = 'In Progress';
+
 const implementStage = z.object({
   id: z.literal('implement'),
   when: z.object({ status: statusName }).prefault({ status: 'Ready' }),
-  claim: z.object({ status: statusName }).prefault({ status: 'In Progress' }),
+  claim: z.object({ status: statusName }).prefault({ status: IN_PROGRESS }),
   done: z.object({ status: statusName }).prefault({ status: 'In review' }),
   blocked: z.object({ status: statusName }).prefault({ status: 'Todo' }),
   context: z.object({
@@ -157,6 +160,36 @@ const stage = z.discriminatedUnion(
   ],
 );
 
+/** How many days back a tick looks for issues to add to the board. */
+const DEFAULT_NEW_ISSUE_WINDOW_DAYS = 2;
+
+/**
+ * Board hygiene: what the pipeline keeps tidy on the board besides running stages. Every part is off by
+ * default, so a config without `board` changes nothing that is not a stage's.
+ */
+const boardHygiene = z.object({
+  /** Adds the open issues of the allowlisted repositories created in the window that are not on the board. */
+  addNewIssues: z.boolean().default(false),
+  newIssueWindowDays: z.int().positive().default(DEFAULT_NEW_ISSUE_WINDOW_DAYS),
+
+  /** Single-select fields an item without a value takes from its repository's other items (the most common value). */
+  inferFields: z.array(z.string().min(1)).default([]),
+
+  /** Moves a parent issue that has not started once one of its sub-issues has. */
+  followSubIssues: z.boolean().default(false),
+  parents: z.object({
+    notStarted: z.array(statusName).default([
+      'Todo',
+      'Ready',
+    ]),
+    started: z.array(statusName).default([
+      IN_PROGRESS,
+      'In review',
+    ]),
+    status: statusName.default(IN_PROGRESS),
+  }).strict().prefault({}),
+}).strict();
+
 /** The schema of `pipeline.config.yml`, with every default the docs promise. */
 export const pipelineConfigSchema = z.object({
   project: z.object({
@@ -187,6 +220,7 @@ export const pipelineConfigSchema = z.object({
     timeoutMinutes: z.int().positive().default(DEFAULT_TIMEOUT_MINUTES),
     maxAttempts: z.int().positive().default(DEFAULT_MAX_ATTEMPTS),
   }).strict().prefault({}),
+  board: boardHygiene.prefault({}),
   stages: z.array(stage).min(1).refine(
     (stages) => new Set(stages.map((entry) => entry.id)).size === stages.length,
     'each stage may appear once',
