@@ -24,6 +24,7 @@ scaffoldVersion: "2.0.0"
 | `export:context` / `check:context` | `scripts/check-context-surfaces.mjs` | Agent surfaces drifting from `.context/docs/README.md` |
 | `boardwright -- <command>` | `packages/runner/src/cli.ts` on Node 26 | Runs the CLI from source (see development-workflow.md) |
 | `build:action` | esbuild (`scripts/build-action.mjs`) | Builds the Action into `dist/` (see below) |
+| `build:npm` | `scripts/build-npm.mjs` | Writes the `boardwright` npm package into `build/npm`: `dist/cli.js`, the README, the licenses, and a `package.json` whose one dependency is the Agent SDK at the locked version |
 
 The test override in `eslint.config.js` (magic numbers and repeated strings allowed) also covers
 `packages/testing/src`, which is test code. Coverage leaves out the two entries, `packages/runner/src/cli.ts`
@@ -65,8 +66,9 @@ with nothing changed leaves `dist/` as it is.
 
 One job per check, so each can be a required status check: `lint`, `typecheck`, `architecture`,
 `unused`, `test`, `audit` (production dependencies, high and above), `context`, `action` (`dist/` is the
-build of the sources, and the Action installs the agent and reaches the CLI on Node 24), `commitlint`
-(every commit of a pull request). `codeql.yml` runs CodeQL (`security-and-quality`) on pushes, pull requests
+build of the sources, the Action installs the agent and reaches the CLI on Node 24, and the npm package
+builds and packs), `commitlint` (every commit of a pull request). `release.yml` publishes the npm
+package when a GitHub release is published (see development-workflow.md, "Branching & Releases"). `codeql.yml` runs CodeQL (`security-and-quality`) on pushes, pull requests
 and weekly, leaving out `dist/`, the bundle of sources it already analyzes.
 
 ## Board pipeline (`.github/workflows/pipeline.yml`)

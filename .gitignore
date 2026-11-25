@@ -1,5 +1,7 @@
 node_modules/
 coverage/
+# The npm package, written by npm run build:npm and published by the release workflow.
+build/
 dist/
 # The Action runs from the committed build at the root (npm run build:action).
 !/dist/

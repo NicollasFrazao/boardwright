@@ -1,0 +1,36 @@
+name: Release
+
+# Publishes the boardwright npm package when a GitHub release is published. The release's tag must be
+# v<version> of package.json. npm authenticates this workflow through trusted publishing (OIDC): no
+# token is stored, and the package gets a provenance attestation.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+      - name: The tag is the version of package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: test "$TAG" = "v$(node -p 'require("./package.json").version')"
+      - run: npm ci
+      - name: dist/ is the build of the tagged sources
+        run: |
+          npm run build:action
+          test -z "$(git status --porcelain --untracked-files=all -- dist)"
+      - run: npm run build:npm
+      - run: npm publish ./build/npm --access public

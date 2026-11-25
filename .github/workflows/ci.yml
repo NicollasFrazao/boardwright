@@ -137,6 +137,10 @@ jobs:
           test -x dist/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude
           dist/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude --version
           node dist/cli.js --help > /dev/null
+      - name: The npm package builds and packs
+        run: |
+          npm run build:npm
+          npm pack ./build/npm --dry-run
 
   commitlint:
     if: github.event_name == 'pull_request'
