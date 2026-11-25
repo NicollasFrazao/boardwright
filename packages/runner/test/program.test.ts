@@ -35,6 +35,7 @@ interface TestEnvironment extends ProgramEnvironment {
   readonly tokens: string[];
   readonly apps: AppCredentials[];
   readonly reviewers: AppCredentials[];
+  readonly commands: Set<string>;
 }
 
 function environment(
@@ -54,6 +55,11 @@ function environment(
   const apps: AppCredentials[] = [];
   const reviewers: AppCredentials[] = [];
 
+  const commands = new Set([
+    'bwrap',
+    'socat',
+  ]);
+
   return {
     files,
     out,
@@ -61,6 +67,7 @@ function environment(
     tokens,
     apps,
     reviewers,
+    commands,
     version: '1.2.3',
     variables,
     readFile: (path) => Promise.resolve(files.get(path)),
@@ -97,6 +104,8 @@ function environment(
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     connectMerger: () => world.merger,
+    platform: 'linux',
+    hasCommand: (name) => Promise.resolve(commands.has(name)),
     inspectApp: () => ({
       installationOf: (repository) => Promise.resolve(repository === 'acme/app' ? {
         permissions: {
@@ -164,6 +173,35 @@ describe('boardwright doctor', () => {
     expect(env.out.join('\n')).toContain('ok    board acme#3: "Roadmap", Status: Todo, Ready, In Progress, In review, Done.');
     expect(env.out.join('\n')).toContain(' failures.');
     expect(env.tokens).toEqual(['secret']);
+  });
+
+  it('fails when the agent sandbox cannot run on this machine, and skips it when the sandbox is off', async () => {
+    const env = environment();
+
+    env.commands.delete('socat');
+
+    expect(await runProgram(
+      ['doctor'],
+      env,
+    )).toBe(EXIT.failed);
+
+    expect(env.out.join('\n')).toContain('FAIL  agent sandbox: socat not found');
+
+    const off = environment();
+
+    off.commands.clear();
+
+    off.files.set(
+      'pipeline.config.yml',
+      `${CONFIG}provider:\n  sandbox:\n    enabled: false\n`,
+    );
+
+    expect(await runProgram(
+      ['doctor'],
+      off,
+    )).toBe(EXIT.ok);
+
+    expect(off.out.join('\n')).not.toContain('agent sandbox');
   });
 
   it('checks the GitHub App\'s installation when one is configured', async () => {
