@@ -29661,6 +29661,28 @@ var FILE_TOOLS = /* @__PURE__ */ new Set([
   "MultiEdit",
   "NotebookEdit"
 ]);
+var READ_TOOLS = /* @__PURE__ */ new Map([
+  [
+    "Read",
+    ["file_path"]
+  ],
+  [
+    "NotebookRead",
+    ["notebook_path"]
+  ],
+  [
+    "Glob",
+    [
+      "path",
+      "pattern"
+    ]
+  ],
+  [
+    "Grep",
+    ["path"]
+  ]
+]);
+var GLOB_SYNTAX = /[*?[{]/u;
 var FORBIDDEN_COMMAND = /\bgit\s+push\b|(?:^|[;&|(\s])gh\s/u;
 var MS_PER_MINUTE2 = 6e4;
 var UNATTENDED = [
@@ -29838,6 +29860,14 @@ function guardTools(cwd, deniedPaths) {
 }
 function deniedReason(cwd, deniedPaths, toolName, toolInput) {
   const fields = typeof toolInput === "object" && toolInput !== null ? toolInput : {};
+  const readFields = READ_TOOLS.get(toolName);
+  if (readFields !== void 0) {
+    return readProblem(
+      cwd,
+      readFields,
+      fields
+    );
+  }
   if (FILE_TOOLS.has(toolName)) {
     const target = fields.file_path ?? fields.notebook_path;
     return typeof target === "string" ? pathProblem(
@@ -29851,7 +29881,26 @@ function deniedReason(cwd, deniedPaths, toolName, toolInput) {
   }
   return void 0;
 }
-function pathProblem(cwd, deniedPaths, target) {
+function readProblem(cwd, readFields, fields) {
+  for (const field of readFields) {
+    const value = fields[field];
+    if (typeof value !== "string") {
+      continue;
+    }
+    const target = field === "pattern" ? value.split(GLOB_SYNTAX)[0] ?? "" : value;
+    if (target !== "" && worktreePath(
+      cwd,
+      target
+    ) === void 0) {
+      return `${value} is outside the worktree; agents read only the worktree.`;
+    }
+  }
+  return void 0;
+}
+function worktreePath(cwd, target) {
+  if (target.startsWith("~")) {
+    return void 0;
+  }
   const path = relative(
     cwd,
     isAbsolute(target) ? target : join(
@@ -29862,7 +29911,14 @@ function pathProblem(cwd, deniedPaths, target) {
     "\\",
     "/"
   );
-  if (path.startsWith("..") || isAbsolute(path)) {
+  return path.startsWith("..") || isAbsolute(path) ? void 0 : path;
+}
+function pathProblem(cwd, deniedPaths, target) {
+  const path = worktreePath(
+    cwd,
+    target
+  );
+  if (path === void 0) {
     return `${target} is outside the worktree.`;
   }
   return findDeniedPaths(
