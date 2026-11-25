@@ -25,7 +25,8 @@
     "check:unused": "knip",
     "check:context": "node scripts/check-context-surfaces.mjs",
     "export:context": "node scripts/check-context-surfaces.mjs --write",
-    "prepare": "husky"
+    "prepare": "husky",
+    "build:action": "node scripts/build-action.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
@@ -35,6 +36,7 @@
     "@types/node": "26.6.6",
     "@vitest/coverage-v8": "5.1.1",
     "dependency-cruiser": "18.8.0",
+    "esbuild": "0.28.2",
     "eslint": "10.15.0",
     "eslint-plugin-jsdoc": "65.5.0",
     "eslint-plugin-sonarjs": "4.2.2",

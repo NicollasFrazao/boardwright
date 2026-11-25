@@ -23,10 +23,28 @@ scaffoldVersion: "2.0.0"
 | `test` / `test:coverage` | Vitest 5 (`vitest.config.ts`) | Behaviour; coverage below 80% fails |
 | `export:context` / `check:context` | `scripts/check-context-surfaces.mjs` | Agent surfaces drifting from `.context/docs/README.md` |
 | `boardwright -- <command>` | `packages/runner/src/cli.ts` on Node 26 | Runs the CLI from source (see development-workflow.md) |
+| `build:action` | esbuild (`scripts/build-action.mjs`) | Builds the Action into `dist/` (see below) |
 
 The test override in `eslint.config.js` (magic numbers and repeated strings allowed) also covers
-`packages/testing/src`, which is test code. Coverage leaves out `packages/runner/src/cli.ts`, the
-composition root; `runProgram`, which it calls, is fully tested.
+`packages/testing/src`, which is test code. Coverage leaves out the two entries, `packages/runner/src/cli.ts`
+and `packages/runner/src/action.ts`: they only bind the process to `runProgram`, `actionCommand` and
+`installPackages`, which are tested; the CI job `action` runs the Action itself.
+
+## The Action's build (`dist/`)
+
+`action.yml` runs `dist/index.js` on `node24`, so `dist/` is committed. `npm run build:action` writes:
+
+- `index.js`, from `packages/runner/src/action.ts`: reads the inputs, installs the agent packages, then
+  runs `cli.js` once as a child process with an environment built for it;
+- `cli.js`, the CLI bundled for Node 24, without `@anthropic-ai/claude-agent-sdk`: that package is under
+  Anthropic's commercial terms, and its native binary is hundreds of megabytes;
+- `agent-packages.json`, the SDK and its native binaries as `package-lock.json` pins them (tarball and
+  `sha512` integrity), which `index.js` downloads into `dist/node_modules` and checks before unpacking;
+- `THIRD_PARTY_LICENSES.txt`, the license of every npm package inside the bundle.
+
+**Rebuild and commit `dist/` in every pull request that changes runtime code or a runtime dependency**,
+including a Dependabot one; the `action` job fails otherwise. The build is deterministic, so a rebuild
+with nothing changed leaves `dist/` as it is.
 
 
 ## Local rules (`eslint-rules/`)
@@ -46,9 +64,10 @@ composition root; `runProgram`, which it calls, is fully tested.
 ## CI jobs (`.github/workflows/ci.yml`)
 
 One job per check, so each can be a required status check: `lint`, `typecheck`, `architecture`,
-`unused`, `test`, `audit` (production dependencies, high and above), `context`, `commitlint` (every
-commit of a pull request). `codeql.yml` runs CodeQL (`security-and-quality`) on pushes, pull requests
-and weekly.
+`unused`, `test`, `audit` (production dependencies, high and above), `context`, `action` (`dist/` is the
+build of the sources, and the Action installs the agent and reaches the CLI on Node 24), `commitlint`
+(every commit of a pull request). `codeql.yml` runs CodeQL (`security-and-quality`) on pushes, pull requests
+and weekly, leaving out `dist/`, the bundle of sources it already analyzes.
 
 ## Board pipeline (`.github/workflows/pipeline.yml`)
 

@@ -1,6 +1,8 @@
 node_modules/
 coverage/
 dist/
+# The Action runs from the committed build at the root (npm run build:action).
+!/dist/
 *.log
 .env
 

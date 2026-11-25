@@ -14,6 +14,8 @@ Known gaps, each with the reason it is still open and the issue that closes it.
 
 | # | Gap | Why it is open | Closed by |
 | --- | --- | --- | --- |
+| TD-14 | The Action has not run a stage end to end with a real agent | Same credential and sandbox decision as TD-8 | #8 |
+| TD-13 | A Dependabot pull request that bumps a runtime dependency fails the `action` check until `dist/` is rebuilt on its branch | Rebuilding and pushing from a workflow needs a token that can write to Dependabot's branches; for now a person runs `npm run build:action` on the branch | — |
 | TD-12 | `getMergeFacts` reads the first 100 changed files; a larger pull request may hide a denied path | Such a pull request is far over the default `maxChangedLines` (400) and is blocked for size first | — |
 | TD-10 | `getFeedback` reads the first 100 review threads and 100 checks of a pull request | More than that is beyond what one round fixes; a person takes over | — |
 | TD-8 | The implement stage has not run end to end with a real agent on a sandbox repository | It needs an agent credential the development machine does not have (ADR 0004) and a sandbox repository the owner approves | #5 |

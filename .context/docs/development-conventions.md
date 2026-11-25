@@ -50,8 +50,9 @@ Enforced by `npm run check:architecture`. See [architecture.md](architecture.md)
   and the context base through ports; it never imports an SDK.
 - `packages/core` imports no other package. An adapter (`context`, `git`, `github`, `agent-*`) imports only the
   core, through its public API (`packages/core/src/index.ts`), never another adapter.
-- `packages/runner` and `action/` are composition roots: the only modules that read `process.env`,
-  read tokens or construct clients. Nothing imports them.
+- `packages/runner` is the composition root, with two entries: the CLI (`cli.ts`) and the Action
+  (`action.ts`). It holds the only modules that read `process.env`, read tokens or construct clients.
+  Nothing imports it.
 - No `src` imports `packages/testing` (the test doubles). No cycles. No orphan module.
 
 ## TypeScript that runs without a build

@@ -13,8 +13,8 @@ under your rulesets and required checks.
 - **The board is the source of truth.** A config file maps statuses to stages; a reconciliation loop
   reads the board, claims an item, runs the stage's agent in its own git worktree, and moves the card.
   State lives on GitHub (the Status plus a run marker comment), so there is no database.
-- **Two runtimes, one core.** A local runner (CLI/daemon) that uses the agent login already on your
-  machine, and a GitHub Action for API-key setups.
+- **Two runtimes, one core.** A local runner (CLI/daemon) and a GitHub Action, both running the same
+  tick and authenticating the agent the same way.
 - **Your repository's context decides the agent.** Playbooks and skills come from the repository's
   [dotcontext](https://github.com/vinilana/dotcontext) base (`.context/agents`, `.context/skills`),
   selected by PREVC phase; repositories without one fall back to `AGENTS.md`/`CLAUDE.md`.
@@ -40,6 +40,60 @@ npm run boardwright -- run             # keeps ticking until Ctrl+C
 The agent authenticates only through the [Claude Agent SDK's documented methods](https://code.claude.com/docs/en/agent-sdk/quickstart):
 an API key, Amazon Bedrock, Claude Platform on AWS, Google Cloud or Microsoft Foundry. boardwright never
 offers or handles a claude.ai login.
+
+## GitHub Action
+
+The Action runs one tick per workflow run, the same `tick()` as `once`. Every tick reads the whole
+board, so the events only decide *when* it looks; a missed event is caught by the next one or by the
+schedule.
+
+```yaml
+name: boardwright
+
+on:
+  issues:
+    types: [labeled]
+  pull_request_review:
+  check_suite:
+    types: [completed]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+# One tick at a time; a queued run is enough, since the next tick sees everything that happened.
+concurrency:
+  group: boardwright
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7          # the repository that holds pipeline.config.yml
+      - uses: NicollasFrazao/boardwright@<commit sha>
+        with:
+          github-token: ${{ secrets.BOARDWRIGHT_GITHUB_TOKEN }}
+          # merge-token: ${{ secrets.BOARDWRIGHT_MERGE_TOKEN }}  # only with a merge stage
+          # dry-run: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+| Input | Default | |
+| --- | --- | --- |
+| `github-token` | — (required) | Reads the board and writes to the repositories. A user's Project needs a classic token with the `project` scope; the job's `GITHUB_TOKEN` cannot read it. |
+| `merge-token` | `''` | The merge stage's token, an identity other than the one that opens pull requests. |
+| `config` | `pipeline.config.yml` | The config, relative to the workspace. |
+| `dry-run` | `false` | Print what the tick would do and change nothing. |
+
+The agent's credentials go on the step's `env`, never as inputs: `ANTHROPIC_API_KEY` or a cloud
+provider's variables. The Action runs on `node24`; on its first run in a job it downloads the Claude
+Agent SDK and its native binary from npm, at the versions `package-lock.json` pins, and refuses any
+tarball whose hash differs from the lockfile's.
 
 ## Safety model
 
