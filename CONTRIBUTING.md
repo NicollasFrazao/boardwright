@@ -60,9 +60,10 @@ npm run check:architecture  # layer rules
 npm run check:unused        # unused files, exports, dependencies
 npm run test:coverage       # all tests, 80% coverage on all four metrics
 npm run check:context       # agent surfaces in sync with .context/docs/README.md
+npm run build:action        # rebuilds the Action's dist/; commit it whenever it changed
 ```
 
-They are the CI jobs. If they pass locally, CI passes.
+They are the CI jobs. If they pass locally and `dist/` is committed as `build:action` left it, CI passes.
 
 ## Pull requests
 

@@ -25,11 +25,13 @@ npm run check:architecture  # dependency-cruiser layer rules
 npm run check:unused        # knip: unused files, exports, types, dependencies
 npm run test:coverage       # unit + tooling, 80% on all four metrics
 npm run check:context       # agent surfaces are copies of .context/docs/README.md
+npm run build:action        # rebuilds dist/; commit it whenever it changed
 ```
 
 These are exactly the CI jobs (`lint`, `typecheck`, `architecture`, `unused`, `test`, `context`,
-plus `audit` and `commitlint`), one job per command, every one a required check on `master`. A green
-local gate means a green CI.
+`action`, plus `audit` and `commitlint`), one job per command, every one a required check on `master`.
+A green local gate, with `dist/` committed as `build:action` left it, means a green CI: the `action`
+job fails when `dist/` is not the build of the sources, and any change under `packages/` can change it.
 
 - Run them **one at a time**; in parallel they compete for memory on a small machine.
 - The `pre-commit` hook runs ESLint on the staged files only, and `commit-msg` runs commitlint. They
