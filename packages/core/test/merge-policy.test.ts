@@ -17,8 +17,8 @@ const POLICY: MergePolicy = {
   requireAgentApproval: true,
   maxChangedLines: 400,
   deniedPaths: DEFAULT_MERGE_DENIED_PATHS,
-  optInLabel: 'agent-merge',
-  optOutLabel: 'needs-human',
+  optInLabel: 'boardwright:merge',
+  optOutLabel: 'boardwright:hold',
 };
 
 const PASSING: MergeFacts = {
@@ -26,8 +26,8 @@ const PASSING: MergeFacts = {
   headSha: 'abc1234',
   isDraft: false,
   labels: [
-    'agent',
-    'agent-merge',
+    'boardwright:agent',
+    'boardwright:merge',
   ],
   checks: 'passing',
   mergeability: 'mergeable',
@@ -172,7 +172,7 @@ describe('evaluateMergePolicy', () => {
   it('leaves alone a pull request without the opt-in label, and merges without one when none is required', () => {
     const unlabelled = {
       ...PASSING,
-      labels: ['agent'],
+      labels: ['boardwright:agent'],
     };
 
     expect(evaluateMergePolicy(
@@ -194,8 +194,8 @@ describe('evaluateMergePolicy', () => {
       {
         ...PASSING,
         labels: [
-          'agent-merge',
-          'needs-human',
+          'boardwright:merge',
+          'boardwright:hold',
         ],
       },
       POLICY,
@@ -204,7 +204,7 @@ describe('evaluateMergePolicy', () => {
       failures: [
         {
           code: 'opted-out',
-          detail: 'The pull request is labelled `needs-human`: a person merges it.',
+          detail: 'The pull request is labelled `boardwright:hold`: a person merges it.',
         },
       ],
     });

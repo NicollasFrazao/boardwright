@@ -19,7 +19,7 @@ describe('parsePipelineConfig', () => {
     const config = baseConfig();
 
     expect(config.trigger).toEqual({
-      label: 'agent',
+      label: 'boardwright:agent',
       requireTriage: true,
     });
 
