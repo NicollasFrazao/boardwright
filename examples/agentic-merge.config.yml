@@ -1,0 +1,30 @@
+# Implement, review and an agentic merge. The merge is decided by a deterministic policy (required checks,
+# no unresolved thread, the review's verdict, no denied path, a size limit) and goes through native
+# auto-merge, never around the ruleset. It needs BOARDWRIGHT_MERGE_TOKEN, an identity other than the one
+# that opens pull requests.
+project:
+  owner: your-login
+  number: 1
+repositories:
+  - your-login/your-repository
+stages:
+  - id: implement
+  - id: review
+  - id: address-feedback
+  - id: merge
+    # auto: merge when the policy passes. agent: a read-only gatekeeper is asked as well; it can veto, never force.
+    mode: agent
+    method: squash
+    require:
+      # The latest review of the head commit must approve.
+      agentApproval: true
+      maxChangedLines: 400
+      deniedPaths:
+        - .github/**
+        - '**/migrations/**'
+        - '**/*.lock'
+        - '**/package-lock.json'
+      # Only pull requests with this label are merged; null merges every one that passes.
+      optInLabel: boardwright:merge
+      # A person adds this label to a pull request to merge it themselves.
+      optOutLabel: boardwright:hold

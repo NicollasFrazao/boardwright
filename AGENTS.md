@@ -68,6 +68,7 @@ develops others:
 - `packages/github/` — the GitHub adapters: the Projects v2 board and the repository host
 - `packages/runner/` — the CLI (`doctor`, `once`, `run`, `init`) and the GitHub Action's entry (`action.ts`)
 - `action.yml`, `dist/` — the GitHub Action and its committed build (`npm run build:action`)
+- `examples/` — example configs (minimal, full pipeline, agentic merge), each checked against the schema by a test
 - `packages/testing/` — fakes of every port and the GitHub API replay, for tests only
 - `packages/git/` — the git workspaces: a cached clone per repository, a worktree per run
 - `packages/agent-claude/` — the Claude provider on the Claude Agent SDK

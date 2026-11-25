@@ -1,0 +1,56 @@
+# Every agent stage, with a person still merging. A card goes Refine → Ready → In Progress → In review;
+# in review, an agent reviews the pull request and another addresses the review threads and failing checks.
+project:
+  owner: your-login
+  number: 1
+  statusField: Status
+repositories:
+  - your-login/api
+  - your-login/web
+trigger:
+  # Only issues with this label, added by someone with triage access, enter the pipeline.
+  label: boardwright:agent
+  requireTriage: true
+# How many agent runs one tick may start; the rest wait for the next tick.
+concurrency: 2
+provider:
+  name: claude
+  model: claude-sonnet-5-5
+git:
+  author:
+    name: boardwright
+    email: boardwright@users.noreply.github.com
+guardRails:
+  deniedPaths:
+    - .github/workflows/**
+    - '**/.env'
+    - '**/.env.*'
+    - '**/*.pem'
+    - '**/*.key'
+    - infra/terraform/**
+  maxTurns: 80
+  timeoutMinutes: 60
+  maxAttempts: 3
+stages:
+  # Writes a plan on the issue (read-only session); Refine → Ready, or Todo when the agent needs a person.
+  - id: refine
+    when: { status: Refine }
+    done: { status: Ready }
+    blocked: { status: Todo }
+  # Implements on a branch and opens the pull request.
+  - id: implement
+    when: { status: Ready }
+    claim: { status: In Progress }
+    done: { status: In review }
+    blocked: { status: Todo }
+    context:
+      agent: feature-developer
+      agentByLabel:
+        bug: bug-fixer
+  # Reviews each new head of the pull request; comments only, never approves.
+  - id: review
+    when: { status: In review }
+    timeoutMinutes: 20
+  # Pushes fixes for unresolved review threads and failing checks.
+  - id: address-feedback
+    when: { status: In review }
