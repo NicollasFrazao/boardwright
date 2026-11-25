@@ -97,7 +97,7 @@ comment lets it try again.
 
 | Stage | From Status | PREVC phase | What it does |
 | --- | --- | --- | --- |
-| refine (optional) | a column the board owner adds | P | Plan as an issue comment or a `.context/plans` file |
+| refine (optional) | a Status the board owner adds (default `Refine`) | P | A read-only `plan` task with the `architect-specialist` playbook; the plan is posted as a marked comment on the issue and the card moves to `done` (default Ready). Deleting the plan comment asks for a new one. Not a `.context/plans` file: the repositories ignore that folder as dotcontext's local state |
 | implement | Ready | E | Branch `agent/issue-N`, change, local gate, pull request with `Closes #N` |
 | review | In review | R | Reviews the head of `agent/issue-N`'s pull request read-only; posts a review that only comments, with line comments and a `<!-- boardwright:review v=1 verdict=… head=… -->` marker; never approves, never moves the card. A new push starts a new round; `maxAttempts` caps the rounds |
 | address-feedback | In review | E | When the pull request has unresolved review threads or failing checks: the agent commits fixes on its branch, the core checks them against the denylist, pushes without force and resolves only the known threads the agent says it addressed. Never moves the card; `maxAttempts` caps the rounds |

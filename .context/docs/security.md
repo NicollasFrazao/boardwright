@@ -54,7 +54,7 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
   push or call `gh`;
 - the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`;
 - only the project's settings (`settingSources: ['project']`), not the machine user's;
-- for a review, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
+- for a review or a plan, read tools only (`Read`, `Glob`, `Grep`, `Bash`) with `Edit`, `Write`, `MultiEdit` and
   `NotebookEdit` denied; its worktree is thrown away and nothing is pushed. Its review only comments; it
   never approves.
 - for address-feedback, the review comments and check names are fenced as input like the issue, and
