@@ -6,10 +6,11 @@
  * fails when the result differs from what was committed.
  */
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { AGENT_SDK, pinnedAgentPackages } from './agent-packages.mjs';
 import { bundledPackages } from './bundled-packages.mjs';
+import { versionOnlyManifest } from './version-only-manifest.mjs';
 
 const OUT = 'dist';
 const LICENSE_RULE_LENGTH = 72;
@@ -38,6 +39,8 @@ const { metafile } = await build({
   // The licenses go to one file, with every bundled package's full text (below).
   legalComments: 'none',
   metafile: true,
+  // The CLI imports the root manifest for --version; the bundle carries its version and nothing else.
+  plugins: [versionOnlyManifest(resolve('package.json'))],
   // Bundled CommonJS modules call require(); an ES module has none of its own.
   banner: { js: "import { createRequire as __createRequire } from 'node:module';\nconst require = __createRequire(import.meta.url);" },
   logLevel: 'warning',

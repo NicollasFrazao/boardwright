@@ -16,7 +16,7 @@ import {
 import { sleep } from './daemon.ts';
 import { acquireFileLock } from './lock.ts';
 import { runProgram } from './program.ts';
-// The root manifest carries the release version; esbuild inlines it, so dist/ prints the version it was built from.
+// The root manifest carries the release version. esbuild inlines its version only (scripts/version-only-manifest.mjs), so dist/ prints the version it was built from.
 import manifest from '../../../package.json' with { type: 'json' };
 
 function hasCode(
