@@ -34,7 +34,6 @@ export {
   parsePipelineConfig,
   pipelineConfigSchema,
   stageLimits,
-  type AgentStageConfig,
   type PipelineConfig,
   type StageConfig,
   type StageLimits,
@@ -52,6 +51,7 @@ export type * from './application/ports.ts';
 export {
   buildImplementPrompt,
   buildFeedbackPrompt,
+  buildGatekeeperPrompt,
   buildPlanPrompt,
   buildReviewPrompt,
   type FeedbackPromptInput,
@@ -118,6 +118,7 @@ export {
   judge,
   policyOf,
   runMergeStage,
+  type GatekeeperLimits,
   type MergeJudgement,
   type MergeStageConfig,
   type MergeStageDependencies,

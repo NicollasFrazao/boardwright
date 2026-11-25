@@ -27,6 +27,7 @@ import {
   isDecided,
   judge,
   runMergeStage,
+  type GatekeeperLimits,
   type MergeStageConfig,
   type MergeStageDependencies,
 } from './merge-stage.ts';
@@ -156,6 +157,7 @@ export function handlerFor(
       return mergeHandler(
         dependencies,
         stage,
+        run,
       );
     case 'address-feedback':
       return {
@@ -191,6 +193,7 @@ export function handlerFor(
 function mergeHandler(
   dependencies: MergeStageDependencies & { readonly logger: Logger },
   stage: MergeStageConfig,
+  limits: GatekeeperLimits,
 ): StageHandler {
   return {
     claimStatus: undefined,
@@ -247,6 +250,7 @@ function mergeHandler(
       dependencies,
       stage,
       issue,
+      limits,
     ),
     statusAfter: () => undefined,
   };

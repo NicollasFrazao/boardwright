@@ -1,5 +1,4 @@
 import type {
-  AgentStageConfig,
   PipelineConfig,
   StageConfig,
 } from './config.ts';
@@ -193,14 +192,14 @@ async function checkMergeLabels(
   return checks;
 }
 
-function runsAnAgent(stage: StageConfig): stage is AgentStageConfig {
-  return stage.id !== 'merge';
+function runsAnAgent(stage: StageConfig): boolean {
+  return stage.id !== 'merge' || stage.mode === 'agent';
 }
 
 async function checkContext(
   dependencies: DoctorDependencies,
   repository: string,
-  stage: AgentStageConfig,
+  stage: StageConfig,
 ): Promise<DoctorCheck[]> {
   const subject = `${repository} ${stage.id}`;
 

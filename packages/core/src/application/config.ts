@@ -115,6 +115,20 @@ const DEFAULT_MERGE_ROUNDS = 10;
 const mergeStage = z.object({
   id: z.literal('merge'),
   when: z.object({ status: statusName }).prefault({ status: 'In review' }),
+
+  /** `auto` merges when the policy passes; `agent` also asks a gatekeeper agent, which can veto, never force. */
+  mode: z.enum([
+    'auto',
+    'agent',
+  ]).default('auto'),
+  context: z.object({
+    phase: phase.default('V'),
+    agent: z.string().min(1).default('security-auditor'),
+    agentByLabel: z.record(
+      z.string(),
+      z.string().min(1),
+    ).default({}),
+  }).prefault({}),
   method: z.enum([
     'squash',
     'merge',
@@ -128,6 +142,7 @@ const mergeStage = z.object({
     optOutLabel: z.string().min(1).default('boardwright:hold'),
   }).strict().prefault({}),
   maxAttempts: z.int().positive().default(DEFAULT_MERGE_ROUNDS),
+  maxTurns: z.int().positive().optional(),
   timeoutMinutes: z.int().positive().optional(),
 }).strict();
 
@@ -184,9 +199,6 @@ export type PipelineConfig = z.output<typeof pipelineConfigSchema>;
 /** One stage of a validated configuration. */
 export type StageConfig = PipelineConfig['stages'][number];
 
-/** A stage that runs an agent with a playbook; every stage but merge. */
-export type AgentStageConfig = Exclude<StageConfig, { id: 'merge' }>;
-
 /** The limits that apply to one stage: its own overrides over the global guard rails. */
 export interface StageLimits {
   readonly maxTurns: number;
@@ -240,7 +252,7 @@ export function stageLimits(
   const timeoutMinutes = stageConfig.timeoutMinutes ?? config.guardRails.timeoutMinutes;
 
   return {
-    maxTurns: ('maxTurns' in stageConfig ? stageConfig.maxTurns : undefined) ?? config.guardRails.maxTurns,
+    maxTurns: stageConfig.maxTurns ?? config.guardRails.maxTurns,
     timeoutMs: timeoutMinutes * MS_PER_MINUTE,
     maxAttempts: stageConfig.maxAttempts ?? config.guardRails.maxAttempts,
     staleAfterMs: (timeoutMinutes + STALE_GRACE_MINUTES) * MS_PER_MINUTE,
