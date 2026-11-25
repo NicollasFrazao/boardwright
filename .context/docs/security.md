@@ -37,7 +37,10 @@ the people who could have made the change themselves.
   permission, so it can never start an agent.
 - **Repository token:** fine-grained, contents/pull requests/issues read-write on the allowlisted
   repositories; pull requests opened with the default token do not trigger CI.
-- **Merge token (opt-in):** separate from the token that opened the pull request.
+- **Merge token (opt-in):** `BOARDWRIGHT_MERGE_TOKEN`, separate from the token that opened the pull
+  request; `once` refuses to run a config with a merge stage without it. The merger merges at the
+  evaluated head commit (`sha`), so a push after the evaluation fails the merge instead of merging
+  unchecked commits, and it never bypasses the ruleset: it falls back to native auto-merge.
 - **Agent credentials:** only the Agent SDK's documented methods (`ANTHROPIC_API_KEY`, Bedrock, Claude
   Platform on AWS, Google Cloud, Foundry), never a claude.ai login, and never stored or managed by
   boardwright. See [ADR 0004](./adr/0004-agent-credentials-through-documented-methods.md).

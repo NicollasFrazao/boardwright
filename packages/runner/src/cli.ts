@@ -9,6 +9,7 @@ import { ClaudeAgentProvider } from '@boardwright/agent-claude';
 import { GitWorkspaces } from '@boardwright/git';
 import {
   createGitHubClient,
+  GitHubMerger,
   GitHubRepoHost,
   ProjectBoard,
 } from '@boardwright/github';
@@ -90,6 +91,7 @@ process.exitCode = await runProgram(
         repoHost: new GitHubRepoHost(client),
       };
     },
+    connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
     connectAgents: (
       config,
       token,

@@ -12,6 +12,7 @@ import {
 } from './implement-stage.ts';
 import type {
   Issue,
+  Logger,
   PullRequest,
 } from './ports.ts';
 import {
@@ -22,10 +23,19 @@ import {
   hasPlan,
   runRefineStage,
 } from './refine-stage.ts';
+import {
+  isDecided,
+  judge,
+  runMergeStage,
+  type MergeStageConfig,
+  type MergeStageDependencies,
+} from './merge-stage.ts';
 import { runReviewStage } from './review-stage.ts';
 
+const NO_PULL_REQUEST = 'no-pull-request';
+
 /** Why a stage does not apply to an item right now. */
-export type StagePrecondition = 'no-pull-request' | 'no-feedback';
+export type StagePrecondition = 'no-pull-request' | 'no-feedback' | 'merge-waiting' | 'merge-not-opted-in';
 
 /**
  * What the loop needs to know about one stage: when it applies, when its work is already in place, how
@@ -50,7 +60,10 @@ export interface StageHandler {
 
 /** The handler of a configured stage. */
 export function handlerFor(
-  dependencies: ImplementStageDependencies & { readonly config: PipelineConfig },
+  dependencies: ImplementStageDependencies & MergeStageDependencies & {
+    readonly config: PipelineConfig;
+    readonly logger: Logger;
+  },
   stage: StageConfig,
 ): StageHandler {
   const limits = stageLimits(
@@ -59,7 +72,6 @@ export function handlerFor(
   );
 
   const run = {
-    stage,
     deniedPaths: dependencies.config.guardRails.deniedPaths,
     maxTurns: limits.maxTurns,
     timeoutMs: limits.timeoutMs,
@@ -83,6 +95,7 @@ export function handlerFor(
           dependencies,
           {
             ...run,
+            stage,
             issue,
           },
         ),
@@ -96,7 +109,7 @@ export function handlerFor(
         claimStatus: undefined,
         repairStatus: undefined,
         giveUpStatus: undefined,
-        precondition: async (issue) => await openPullRequest(issue) === undefined ? 'no-pull-request' : undefined,
+        precondition: async (issue) => await openPullRequest(issue) === undefined ? NO_PULL_REQUEST : undefined,
         isResultInPlace: async (issue) => {
           const pullRequest = await openPullRequest(issue);
 
@@ -110,6 +123,7 @@ export function handlerFor(
           dependencies,
           {
             ...run,
+            stage,
             issue,
           },
         ),
@@ -129,6 +143,7 @@ export function handlerFor(
           dependencies,
           {
             ...run,
+            stage,
             issue,
           },
         ),
@@ -137,6 +152,11 @@ export function handlerFor(
           event,
         ),
       };
+    case 'merge':
+      return mergeHandler(
+        dependencies,
+        stage,
+      );
     case 'address-feedback':
       return {
         claimStatus: undefined,
@@ -146,7 +166,7 @@ export function handlerFor(
           const pullRequest = await openPullRequest(issue);
 
           if (pullRequest === undefined) {
-            return 'no-pull-request';
+            return NO_PULL_REQUEST;
           }
 
           return hasFeedback(await dependencies.repoHost.getFeedback(
@@ -159,12 +179,77 @@ export function handlerFor(
           dependencies,
           {
             ...run,
+            stage,
             issue,
           },
         ),
         statusAfter: () => undefined,
       };
   }
+}
+
+function mergeHandler(
+  dependencies: MergeStageDependencies & { readonly logger: Logger },
+  stage: MergeStageConfig,
+): StageHandler {
+  return {
+    claimStatus: undefined,
+    repairStatus: undefined,
+    giveUpStatus: undefined,
+    precondition: async (issue) => {
+      const judgement = await judge(
+        dependencies,
+        stage,
+        issue,
+      );
+
+      if (judgement === undefined) {
+        return NO_PULL_REQUEST;
+      }
+
+      const {
+        decision,
+        failures,
+      } = judgement.evaluation;
+
+      if (
+        decision === 'waiting'
+        || decision === 'not-opted-in'
+      ) {
+        dependencies.logger.info(
+          'merge.policy',
+          {
+            issue: `${issue.ref.repository}#${issue.ref.number}`,
+            decision,
+            failures: failures.map((failure) => failure.code),
+          },
+        );
+
+        return decision === 'waiting' ? 'merge-waiting' : 'merge-not-opted-in';
+      }
+
+      return undefined;
+    },
+    isResultInPlace: async (issue) => {
+      const judgement = await judge(
+        dependencies,
+        stage,
+        issue,
+      );
+
+      return judgement !== undefined && isDecided(
+        dependencies,
+        judgement,
+        issue,
+      );
+    },
+    run: (issue) => runMergeStage(
+      dependencies,
+      stage,
+      issue,
+    ),
+    statusAfter: () => undefined,
+  };
 }
 
 /** The Status a card-moving stage reads and sends cards to. */

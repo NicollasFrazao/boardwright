@@ -52,7 +52,8 @@ npm run boardwright -- once --dry-run       # what one tick would do; writes not
 
 `--config <path>` reads another file; `--json` prints the report as JSON. `once` without `--dry-run` acts:
 it needs a token that can write the repositories' contents, issues and pull requests, and an agent
-credential the Agent SDK accepts, such as `ANTHROPIC_API_KEY` (ADR 0004). Clones and worktrees live in
+credential the Agent SDK accepts, such as `ANTHROPIC_API_KEY` (ADR 0004). A config with a merge stage also needs `BOARDWRIGHT_MERGE_TOKEN`, a token other than the one that
+opens pull requests (ADR 0003). Clones and worktrees live in
 `BOARDWRIGHT_CACHE_DIR`, else `$XDG_CACHE_HOME/boardwright` or `~/.cache/boardwright`.
 
 ## Branching & Releases

@@ -1,5 +1,5 @@
 import { formatReviewMarker } from '../domain/review-marker.ts';
-import type { StageConfig } from './config.ts';
+import type { AgentStageConfig } from './config.ts';
 import {
   implementBranch,
   selectAgent,
@@ -16,7 +16,7 @@ import { buildReviewPrompt } from './prompt.ts';
 /** One run of the review stage. */
 export interface ReviewRun {
   readonly issue: Issue;
-  readonly stage: StageConfig;
+  readonly stage: AgentStageConfig;
   readonly deniedPaths: readonly string[];
   readonly maxTurns: number;
   readonly timeoutMs: number;

@@ -31,6 +31,7 @@ import type {
   Clock,
   Issue,
   Logger,
+  MergerPort,
   RunIdSource,
 } from './ports.ts';
 import {
@@ -41,6 +42,7 @@ import {
 /** Everything one tick touches. */
 export interface TickDependencies extends ImplementStageDependencies {
   readonly config: PipelineConfig;
+  readonly merger: MergerPort;
   readonly board: BoardPort;
   readonly clock: Clock;
   readonly runIds: RunIdSource;
@@ -55,6 +57,8 @@ export type SkipReason =
   | 'trigger-without-triage'
   | 'no-pull-request'
   | 'no-feedback'
+  | 'merge-waiting'
+  | 'merge-not-opted-in'
   | 'in-flight'
   | 'up-to-date'
   | 'gave-up'
