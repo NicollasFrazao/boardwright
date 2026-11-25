@@ -90,7 +90,9 @@ The git workspaces give the token to the runner's own `clone`, `fetch` and `push
 The npm package is published only by `release.yml`, through npm trusted publishing: npm accepts the
 workflow's OIDC token for this repository and workflow file, so no npm token exists to leak, and every
 version carries a provenance attestation that links it to the commit it was built from. The job runs in
-the `npm` environment, whose protection rules decide who can release.
+the `npm` environment, which only deploys `v*` tags, and npm trusts only that workflow file in that
+environment: a branch, a pull request or another workflow cannot publish. The first version, 0.1.0, was
+published by hand, because trusted publishing can only be set up for a package that exists.
 
 ## Secrets & Sensitive Data
 
