@@ -4,6 +4,7 @@ import type {
   DoctorReport,
   ExecutionResult,
   PlannedAction,
+  TickEntry,
   TickReport,
 } from '@boardwright/core';
 
@@ -41,21 +42,29 @@ export function formatTick(
   isDryRun: boolean,
 ): string {
   const footer = isDryRun ? 'Dry run: nothing was written.' : 'Done.';
+  const shown = report.entries.filter((entry) => !isOutsideAllowlist(entry));
+  const outside = describeOutsideAllowlist(report.entries);
 
   if (
-    report.entries.length === 0
+    shown.length === 0
     && report.board.length === 0
   ) {
-    return `Nothing to do: no item is in a Status a stage starts from.\n\n${footer}`;
+    return [
+      'Nothing to do: no item is in a Status a stage starts from.',
+      ...outside,
+      '',
+      footer,
+    ].join('\n');
   }
 
   const lines = [
     ...report.board.map(describeBoardEntry),
-    ...report.entries.map((entry) => {
+    ...shown.map((entry) => {
       const plan = `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`;
 
       return entry.result === undefined ? plan : `${plan} → ${describeResult(entry.result)}`;
     }),
+    ...outside,
   ];
 
   lines.push(
@@ -64,6 +73,24 @@ export function formatTick(
   );
 
   return lines.join('\n');
+}
+
+/** An item of a repository the config does not list: on a shared board, most of them. */
+function isOutsideAllowlist(entry: TickEntry): boolean {
+  return entry.action.kind === 'skip' && entry.action.reason === 'repository-not-allowed';
+}
+
+/** One line for the items outside the allowlist, each counted once whatever the stages; none when there are none. */
+function describeOutsideAllowlist(entries: readonly TickEntry[]): string[] {
+  const items = new Set(entries.filter(isOutsideAllowlist).map((entry) => `${entry.issue.repository}#${entry.issue.number}`));
+
+  if (items.size === 0) {
+    return [];
+  }
+
+  const noun = items.size === 1 ? 'item' : 'items';
+
+  return [`Left alone: ${items.size} ${noun} of repositories outside the allowlist.`];
 }
 
 function describeAction(action: PlannedAction): string {

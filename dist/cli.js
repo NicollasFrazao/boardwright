@@ -35586,23 +35586,40 @@ function formatDoctor(report) {
 }
 function formatTick(report, isDryRun) {
   const footer = isDryRun ? "Dry run: nothing was written." : "Done.";
-  if (report.entries.length === 0 && report.board.length === 0) {
-    return `Nothing to do: no item is in a Status a stage starts from.
-
-${footer}`;
+  const shown = report.entries.filter((entry) => !isOutsideAllowlist(entry));
+  const outside = describeOutsideAllowlist(report.entries);
+  if (shown.length === 0 && report.board.length === 0) {
+    return [
+      "Nothing to do: no item is in a Status a stage starts from.",
+      ...outside,
+      "",
+      footer
+    ].join("\n");
   }
   const lines2 = [
     ...report.board.map(describeBoardEntry),
-    ...report.entries.map((entry) => {
+    ...shown.map((entry) => {
       const plan = `${entry.stage}  ${entry.issue.repository}#${entry.issue.number}  ${describeAction(entry.action)}`;
       return entry.result === void 0 ? plan : `${plan} \u2192 ${describeResult(entry.result)}`;
-    })
+    }),
+    ...outside
   ];
   lines2.push(
     "",
     footer
   );
   return lines2.join("\n");
+}
+function isOutsideAllowlist(entry) {
+  return entry.action.kind === "skip" && entry.action.reason === "repository-not-allowed";
+}
+function describeOutsideAllowlist(entries) {
+  const items = new Set(entries.filter(isOutsideAllowlist).map((entry) => `${entry.issue.repository}#${entry.issue.number}`));
+  if (items.size === 0) {
+    return [];
+  }
+  const noun = items.size === 1 ? "item" : "items";
+  return [`Left alone: ${items.size} ${noun} of repositories outside the allowlist.`];
 }
 function describeAction(action) {
   switch (action.kind) {
