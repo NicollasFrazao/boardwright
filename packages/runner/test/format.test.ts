@@ -154,3 +154,82 @@ describe('formatTick', () => {
     ]);
   });
 });
+
+describe('formatTick: items outside the allowlist', () => {
+  const outside = (
+    stage: string,
+    number: number,
+  ): TickReport['entries'][number] => ({
+    stage,
+    itemId: `item-${number}`,
+    issue: {
+      repository: 'acme/other',
+      number,
+    },
+    action: {
+      kind: 'skip',
+      reason: 'repository-not-allowed',
+    },
+    result: undefined,
+  });
+
+  it('sums them up in one line, each item once whatever the stages, after what was planned', () => {
+    const report: TickReport = {
+      board: [],
+      entries: [
+        outside(
+          'review',
+          1,
+        ),
+        {
+          stage: 'refine',
+          itemId: 'item',
+          issue,
+          action: {
+            kind: 'run',
+            attempt: 1,
+          },
+          result: undefined,
+        },
+        outside(
+          'address-feedback',
+          1,
+        ),
+        outside(
+          'refine',
+          2,
+        ),
+      ],
+    };
+
+    expect(formatTick(
+      report,
+      true,
+    ).split('\n')).toEqual([
+      'refine  acme/app#7  run attempt 1',
+      'Left alone: 2 items of repositories outside the allowlist.',
+      '',
+      'Dry run: nothing was written.',
+    ]);
+  });
+
+  it('still says there is nothing to do when they are all there is', () => {
+    expect(formatTick(
+      {
+        board: [],
+        entries: [
+          outside(
+            'refine',
+            3,
+          ),
+        ],
+      },
+      false,
+    ).split('\n')).toEqual([
+      'Nothing to do: no item is in a Status a stage starts from.',
+      'Left alone: 1 item of repositories outside the allowlist.',
+      '',
+      'Done.',
+    ]);
+  });
+});
