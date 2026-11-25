@@ -83,12 +83,29 @@ const addressFeedbackStage = z.object({
   ...limitsOverride,
 }).strict();
 
+const refineStage = z.object({
+  id: z.literal('refine'),
+  when: z.object({ status: statusName }).prefault({ status: 'Refine' }),
+  done: z.object({ status: statusName }).prefault({ status: 'Ready' }),
+  blocked: z.object({ status: statusName }).prefault({ status: 'Todo' }),
+  context: z.object({
+    phase: phase.default('P'),
+    agent: z.string().min(1).default('architect-specialist'),
+    agentByLabel: z.record(
+      z.string(),
+      z.string().min(1),
+    ).default({}),
+  }).prefault({}),
+  ...limitsOverride,
+}).strict();
+
 const stage = z.discriminatedUnion(
   'id',
   [
     implementStage,
     reviewStage,
     addressFeedbackStage,
+    refineStage,
   ],
 );
 

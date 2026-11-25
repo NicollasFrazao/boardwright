@@ -2,6 +2,7 @@ export {
   ClaudeAgentProvider,
   DENIED_TOOLS,
   guardTools,
+  PLAN_REPORT_SCHEMA,
   REPORT_SCHEMA,
   REVIEW_REPORT_SCHEMA,
   REVIEW_TOOLS,

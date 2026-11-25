@@ -406,6 +406,7 @@ export class FakeAgent implements AgentProvider {
     },
     review: undefined,
     addressedThreadIds: [],
+    plan: undefined,
   };
 
   error: Error | undefined;

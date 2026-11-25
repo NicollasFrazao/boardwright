@@ -67,6 +67,7 @@ function feedbackWorld(overrides: Record<string, unknown> = {}): Scenario {
       'PRRT_1',
       'PRRT_unknown',
     ],
+    plan: undefined,
   };
 
   return world;

@@ -14,7 +14,6 @@ Known gaps, each with the reason it is still open and the issue that closes it.
 
 | # | Gap | Why it is open | Closed by |
 | --- | --- | --- | --- |
-| TD-9 | The optional `refine` stage is not implemented yet | #6 is split: review, then address-feedback, then refine | #6 |
 | TD-10 | `getFeedback` reads the first 100 review threads and 100 checks of a pull request | More than that is beyond what one round fixes; a person takes over | — |
 | TD-8 | The implement stage has not run end to end with a real agent on a sandbox repository | It needs an agent credential the development machine does not have (ADR 0004) and a sandbox repository the owner approves | #5 |
 | TD-3 | The ruleset's required checks list the CI job names, so renaming a job breaks merging | GitHub matches required checks by name | — (rename with the ruleset) |

@@ -147,6 +147,7 @@ describe('runImplementStage', () => {
       pullRequest: undefined,
       review: undefined,
       addressedThreadIds: [],
+      plan: undefined,
     };
 
     const outcome = await runImplementStage(
@@ -193,6 +194,7 @@ describe('runImplementStage', () => {
       pullRequest: undefined,
       review: undefined,
       addressedThreadIds: [],
+      plan: undefined,
     };
 
     await runImplementStage(

@@ -50,8 +50,10 @@ export type * from './application/ports.ts';
 export {
   buildImplementPrompt,
   buildFeedbackPrompt,
+  buildPlanPrompt,
   buildReviewPrompt,
   type FeedbackPromptInput,
+  type PlanPromptInput,
   type ImplementPromptInput,
   type ReviewPromptInput,
 } from './application/prompt.ts';
@@ -91,3 +93,8 @@ export {
   hasFeedback,
   runFeedbackStage,
 } from './application/feedback-stage.ts';
+export {
+  hasPlan,
+  PLAN_MARKER,
+  runRefineStage,
+} from './application/refine-stage.ts';
