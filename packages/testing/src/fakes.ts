@@ -719,6 +719,7 @@ export function scenario(config: PipelineConfig = baseConfig()): Scenario {
       body: 'The app needs the feature.',
       labels: ['boardwright:agent'],
       isOpen: true,
+      assignees: ['maintainer'],
     },
   );
 

@@ -200,6 +200,7 @@ async function openOrFindPullRequest(
       draft?.body ?? '',
       issue.ref.number,
     ),
+    assignees: issue.assignees,
   });
 }
 
