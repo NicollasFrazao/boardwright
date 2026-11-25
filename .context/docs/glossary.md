@@ -23,7 +23,8 @@ scaffoldVersion: "2.0.0"
 | **claim** | Taking an item for a run: writing the marker and moving the status |
 | **marker** | Hidden comment on the issue recording a run's stage, id, attempt and result |
 | **attempt** | The ordinal of a run of the same stage on the same item; limited by `maxAttempts` |
-| **trigger** | The label that releases an issue to the pipeline (default `agent`) |
+| **trigger** | The label that releases an issue to the pipeline (default `boardwright:agent`) |
+| **labels** | boardwright's own labels carry the `boardwright:` prefix so they never mix with a repository's labels: `boardwright:agent` (trigger), `boardwright:merge` (opt in to the agentic merge), `boardwright:hold` (a person merges; always wins) |
 | **provider** | An implementation of `AgentProvider` (Claude first) |
 | **playbook** | An agent definition in `.context/agents/*.md` of the target repository |
 | **skill** | A procedure in `.context/skills/*/SKILL.md`, selected by PREVC phase |

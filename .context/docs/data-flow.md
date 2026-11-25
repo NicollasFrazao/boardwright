@@ -15,7 +15,7 @@ scaffoldVersion: "2.0.0"
 The flow below is the target of phases 3–6. Each arrow is one action of `tick()`.
 
 ```
-issue labelled `agent` (by someone with triage)
+issue labelled `boardwright:agent` (by someone with triage)
   └─ board: Ready
        └─ tick: claim → marker comment (stage=implement, attempt=1) → Status In Progress
             └─ worktree agent/issue-N → AgentProvider session (playbook + skills of phase E)

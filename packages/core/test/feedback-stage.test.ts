@@ -235,7 +235,7 @@ describe('buildFeedbackPrompt', () => {
         ref: ISSUE,
         title: 'Add the feature',
         body: 'Body',
-        labels: ['agent'],
+        labels: ['boardwright:agent'],
         isOpen: true,
       },
       pullRequest: {

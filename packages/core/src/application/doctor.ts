@@ -130,6 +130,11 @@ async function checkRepository(
           ),
     ];
 
+    checks.push(...await checkMergeLabels(
+      dependencies,
+      repository,
+    ));
+
     for (const stage of dependencies.config.stages.filter(runsAnAgent)) {
       checks.push(...await checkContext(
         dependencies,
@@ -146,6 +151,45 @@ async function checkRepository(
       messageOf(error),
     )];
   }
+}
+
+/** The merge stage's opt-in and opt-out labels must exist for people to use them. */
+async function checkMergeLabels(
+  dependencies: DoctorDependencies,
+  repository: string,
+): Promise<DoctorCheck[]> {
+  const labels = dependencies.config.stages.flatMap((stage) => stage.id === 'merge'
+    ? [
+        {
+          name: stage.require.optInLabel,
+          purpose: 'to let a pull request opt in to the agentic merge',
+        },
+        {
+          name: stage.require.optOutLabel,
+          purpose: 'to let a person hold a pull request back',
+        },
+      ]
+    : []);
+
+  const checks: DoctorCheck[] = [];
+
+  for (const label of labels) {
+    if (
+      label.name !== null
+      && !await dependencies.repoHost.hasLabel(
+        repository,
+        label.name,
+      )
+    ) {
+      checks.push(check(
+        repository,
+        'warn',
+        `The merge label "${label.name}" does not exist; create it ${label.purpose}.`,
+      ));
+    }
+  }
+
+  return checks;
 }
 
 function runsAnAgent(stage: StageConfig): boolean {

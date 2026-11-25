@@ -16,7 +16,7 @@ import {
   scenario,
 } from '@boardwright/testing';
 
-function implementRun(labels: string[] = ['agent']): ImplementRun {
+function implementRun(labels: string[] = ['boardwright:agent']): ImplementRun {
   const config = baseConfig();
 
   return {
@@ -69,7 +69,7 @@ describe('runImplementStage', () => {
     await runImplementStage(
       world.dependencies,
       implementRun([
-        'agent',
+        'boardwright:agent',
         'bug',
       ]),
     );
@@ -227,7 +227,7 @@ describe('selectAgent', () => {
     expect(selectAgent(
       firstStage(baseConfig()),
       [
-        'agent',
+        'boardwright:agent',
         'enhancement',
       ],
     )).toBe('feature-developer');

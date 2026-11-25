@@ -34,7 +34,7 @@ describe('the implement prompt built from a real base', () => {
         title: 'Fix the incident filter',
         body: 'The filter drops resolved incidents.',
         labels: [
-          'agent',
+          'boardwright:agent',
           'bug',
         ],
         isOpen: true,
