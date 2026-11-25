@@ -63,7 +63,11 @@ process.exitCode = await runProgram(
   process.argv.slice(2),
   {
     version: manifest.version,
+    // Live: a variable loadEnvFile adds is seen here and by the adapters, which strip the tokens from the agent's environment.
     variables: process.env,
+    loadEnvFile: (path) => {
+      process.loadEnvFile(path);
+    },
     readFile: (path) => readFile(
       path,
       'utf8',

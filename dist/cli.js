@@ -35715,6 +35715,7 @@ Commands:
 
 Options:
   --config <path>   The config file (default: ${DEFAULT_CONFIG_PATH})
+  --env-file <path> Load environment variables from a .env file; variables already set win
   --json            Print the report as JSON
   --help            Show this help
   --version, -v     Print the version
@@ -35734,6 +35735,20 @@ function intervalFrom(value) {
     throw new UsageError(`--interval needs a whole number of seconds, at least ${MIN_INTERVAL_SECONDS}.`);
   }
   return seconds;
+}
+function loadEnvFile(environment, value) {
+  if (value === void 0) {
+    return;
+  }
+  if (typeof value !== "string" || value === "") {
+    throw new UsageError("--env-file needs a path.");
+  }
+  try {
+    environment.loadEnvFile(value);
+  } catch (error62) {
+    const reason = error62 instanceof Error ? error62.message : String(error62);
+    throw new UsageError(`Cannot load the env file ${value}: ${reason}`);
+  }
 }
 async function runProgram(argv, environment) {
   try {
@@ -35758,6 +35773,7 @@ async function dispatch(argv, environment) {
     allowPositionals: true,
     options: {
       config: { type: "string" },
+      "env-file": { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean" },
       version: {
@@ -35788,6 +35804,10 @@ async function dispatch(argv, environment) {
     environment.stdout(USAGE);
     return EXIT.ok;
   }
+  loadEnvFile(
+    environment,
+    values["env-file"]
+  );
   switch (command) {
     case "doctor":
       return doctor(
@@ -36062,7 +36082,11 @@ process.exitCode = await runProgram(
   process.argv.slice(2),
   {
     version: package_default.version,
+    // Live: a variable loadEnvFile adds is seen here and by the adapters, which strip the tokens from the agent's environment.
     variables: process.env,
+    loadEnvFile: (path) => {
+      process.loadEnvFile(path);
+    },
     readFile: (path) => readFile3(
       path,
       "utf8"

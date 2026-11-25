@@ -61,6 +61,11 @@ boardwright once                       # runs the due stages: needs ANTHROPIC_AP
 boardwright run                        # keeps ticking until Ctrl+C
 ```
 
+Instead of exporting the variables before every run, put them in a file and pass
+`--env-file <path>` to any command, such as `boardwright doctor --env-file .env`. Node's own `.env`
+parser reads it; a variable already set in the shell wins over the file, and the GitHub tokens are
+still removed from the agent's environment. Keep that file out of version control.
+
 From a clone, `npm run boardwright -- <command>` runs the same CLI from the sources on Node 26.
 
 The agent authenticates only through the [Claude Agent SDK's documented methods](https://code.claude.com/docs/en/agent-sdk/quickstart):
