@@ -109,7 +109,19 @@ const reviewReport = z.object({
 /** The structured output a review session must end with. */
 export const REVIEW_REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(reviewReport);
 
-/** The tools a reviewing agent may use: it reads and runs checks, it never edits. */
+const planReport = z.object({
+  status: z.enum([
+    'completed',
+    'blocked',
+  ]),
+  summary: z.string(),
+  plan: z.string(),
+});
+
+/** The structured output a planning session must end with. */
+export const PLAN_REPORT_SCHEMA: Record<string, unknown> = z.toJSONSchema(planReport);
+
+/** The tools a reviewing or planning agent may use: it reads and runs checks, it never edits. */
 export const REVIEW_TOOLS: readonly string[] = [
   'Read',
   'Glob',
@@ -202,7 +214,7 @@ export class ClaudeAgentProvider implements AgentProvider {
     request: AgentRequest,
     abort: AbortController,
   ): Options {
-    const isReview = request.task === 'review';
+    const isReadOnly = request.task !== 'change';
 
     const hasContextBase = existsSync(join(
       request.cwd,
@@ -228,12 +240,12 @@ export class ClaudeAgentProvider implements AgentProvider {
       maxTurns: request.maxTurns,
       permissionMode: 'dontAsk',
       allowedTools: [
-        ...isReview ? REVIEW_TOOLS : STAGE_TOOLS,
+        ...isReadOnly ? REVIEW_TOOLS : STAGE_TOOLS,
         ...hasContextBase ? DOTCONTEXT_TOOLS : [],
       ],
       disallowedTools: [
         ...DENIED_TOOLS,
-        ...isReview ? WRITE_TOOLS : [],
+        ...isReadOnly ? WRITE_TOOLS : [],
       ],
       settingSources: ['project'],
       systemPrompt: {
@@ -243,7 +255,7 @@ export class ClaudeAgentProvider implements AgentProvider {
       },
       outputFormat: {
         type: 'json_schema',
-        schema: isReview ? REVIEW_REPORT_SCHEMA : REPORT_SCHEMA,
+        schema: reportSchemaFor(request.task),
       },
       hooks: {
         PreToolUse: [{
@@ -384,6 +396,10 @@ function toAgentResult(
     return toReviewResult(result.structured_output);
   }
 
+  if (task === 'plan') {
+    return toPlanResult(result.structured_output);
+  }
+
   const report = agentReport.safeParse(result.structured_output);
 
   if (!report.success) {
@@ -406,6 +422,35 @@ function toAgentResult(
     },
     review: undefined,
     addressedThreadIds: report.data.addressedThreadIds ?? [],
+    plan: undefined,
+  };
+}
+
+function reportSchemaFor(task: AgentRequest['task']): Record<string, unknown> {
+  switch (task) {
+    case 'change':
+      return REPORT_SCHEMA;
+    case 'review':
+      return REVIEW_REPORT_SCHEMA;
+    case 'plan':
+      return PLAN_REPORT_SCHEMA;
+  }
+}
+
+function toPlanResult(output: unknown): AgentResult {
+  const report = planReport.safeParse(output);
+
+  if (!report.success) {
+    return failed('The agent finished without reporting its plan in the expected form.');
+  }
+
+  return {
+    status: report.data.status,
+    summary: report.data.summary,
+    pullRequest: undefined,
+    review: undefined,
+    addressedThreadIds: [],
+    plan: report.data.status === 'completed' ? report.data.plan : undefined,
   };
 }
 
@@ -421,6 +466,7 @@ function toReviewResult(output: unknown): AgentResult {
     summary: report.data.summary,
     pullRequest: undefined,
     addressedThreadIds: [],
+    plan: undefined,
     review: report.data.status === 'completed'
       ? {
           verdict: report.data.verdict,
@@ -441,5 +487,6 @@ function failed(summary: string): AgentResult {
     pullRequest: undefined,
     review: undefined,
     addressedThreadIds: [],
+    plan: undefined,
   };
 }

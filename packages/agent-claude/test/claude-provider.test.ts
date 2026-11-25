@@ -21,6 +21,7 @@ import {
 import {
   ClaudeAgentProvider,
   guardTools,
+  PLAN_REPORT_SCHEMA,
   REPORT_SCHEMA,
   REVIEW_REPORT_SCHEMA,
   type QueryFunction,
@@ -533,5 +534,67 @@ describe('ClaudeAgentProvider: feedback rounds', () => {
       'PRRT_1',
       'PRRT_2',
     ]);
+  });
+});
+
+describe('ClaudeAgentProvider: plan tasks', () => {
+  async function plan(
+    output: unknown,
+    captured?: { options?: Options | undefined },
+  ): ReturnType<ClaudeAgentProvider['run']> {
+    const fake = replying([result({ structured_output: output })]);
+
+    const outcome = await new ClaudeAgentProvider({
+      query: fake.query,
+      environment: {},
+    }).run(request({ task: 'plan' }));
+
+    if (captured !== undefined) {
+      captured.options = fake.calls[0]?.options;
+    }
+
+    return outcome;
+  }
+
+  it('reads only, with the plan schema, and returns the plan', async () => {
+    const captured: { options?: Options | undefined } = {};
+
+    const outcome = await plan(
+      {
+        status: 'completed',
+        summary: 'Planned.',
+        plan: '## Scope',
+      },
+      captured,
+    );
+
+    expect(captured.options?.allowedTools).toEqual([
+      'Read',
+      'Glob',
+      'Grep',
+      'Bash',
+    ]);
+
+    expect(captured.options?.disallowedTools).toContain('Write');
+
+    expect(captured.options?.outputFormat).toEqual({
+      type: 'json_schema',
+      schema: PLAN_REPORT_SCHEMA,
+    });
+
+    expect(outcome.plan).toBe('## Scope');
+  });
+
+  it('carries no plan when blocked, and fails on a malformed report', async () => {
+    expect((await plan({
+      status: 'blocked',
+      summary: 'Which API?',
+      plan: 'draft',
+    })).plan).toBeUndefined();
+
+    expect((await plan({
+      status: 'completed',
+      summary: 'x',
+    })).status).toBe('failed');
   });
 });
