@@ -13,6 +13,8 @@ import {
   GitHubRepoHost,
   ProjectBoard,
 } from '@boardwright/github';
+import { sleep } from './daemon.ts';
+import { acquireFileLock } from './lock.ts';
 import { runProgram } from './program.ts';
 
 function hasCode(
@@ -30,6 +32,27 @@ function cacheDirectory(): string {
       '.cache',
     ),
     'boardwright',
+  );
+}
+
+// SIGINT or SIGTERM lets the current tick finish and stops the runner.
+const shutdown = new AbortController();
+
+for (const signal of [
+  'SIGINT',
+  'SIGTERM',
+] as const) {
+  process.once(
+    signal,
+    () => {
+      process.stderr.write(`${JSON.stringify({
+        level: 'info',
+        event: 'daemon.shutdown',
+        signal,
+      })}\n`);
+
+      shutdown.abort();
+    },
   );
 }
 
@@ -91,6 +114,13 @@ process.exitCode = await runProgram(
         repoHost: new GitHubRepoHost(client),
       };
     },
+    shutdownSignal: () => shutdown.signal,
+    sleep,
+    acquireLock: (name) => acquireFileLock(join(
+      cacheDirectory(),
+      'locks',
+      `${name}.lock`,
+    )),
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
     connectAgents: (
       config,
