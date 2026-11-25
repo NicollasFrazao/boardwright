@@ -157,6 +157,7 @@ process.exitCode = await runProgram(
     )),
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
     connectAppMerger: (credentials) => appMerger(appTokens(credentials)),
+    inspectApp: appTokens,
     connectAgents: (
       config,
       token,

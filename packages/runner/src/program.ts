@@ -5,6 +5,7 @@ import {
   diagnose,
   tick,
   type AgentProvider,
+  type AppInstallationsPort,
   type BoardPort,
   type Logger,
   type MergerPort,
@@ -73,6 +74,9 @@ export interface ProgramEnvironment {
 
   /** The merger as a GitHub App (ADR 0005); preferred over the merge token when the App is configured. */
   connectAppMerger(credentials: AppCredentials): MergerPort;
+
+  /** The App's installations, for `doctor`. */
+  inspectApp(credentials: AppCredentials): AppInstallationsPort;
 }
 
 /** A GitHub App's id and a way to read its private key on first use. */
@@ -323,11 +327,14 @@ async function doctor(
     tokenFrom(environment),
   );
 
+  const app = appCredentials(environment);
+
   const report = await diagnose({
     config,
     board,
     repoHost,
     context: new RepositoryContextProvider(repositoryFiles(repoHost)),
+    ...app === undefined ? {} : { app: environment.inspectApp(app) },
   });
 
   environment.stdout(options.json ? JSON.stringify(

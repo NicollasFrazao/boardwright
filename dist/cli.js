@@ -29428,6 +29428,18 @@ function markerComment(marker, text) {
 }
 
 // packages/core/src/application/doctor.ts
+var APP_REQUIRED_PERMISSIONS = {
+  contents: "write",
+  pull_requests: "write"
+};
+var APP_RECOMMENDED_PERMISSIONS = {
+  issues: "write",
+  checks: "read"
+};
+var PERMISSION_RANK = {
+  read: 1,
+  write: 2
+};
 async function diagnose(dependencies) {
   const checks = [];
   checks.push(...await checkBoard(dependencies));
@@ -29436,11 +29448,69 @@ async function diagnose(dependencies) {
       dependencies,
       repository
     ));
+    if (dependencies.app !== void 0) {
+      checks.push(await checkApp(
+        dependencies.app,
+        repository
+      ));
+    }
   }
   return {
     checks,
     hasFailures: checks.some((check3) => check3.status === "fail")
   };
+}
+async function checkApp(app, repository) {
+  const subject = `${repository} GitHub App`;
+  try {
+    const installation = await app.installationOf(repository);
+    if (installation === void 0) {
+      return check2(
+        subject,
+        "fail",
+        "The App is not installed on this repository; add it to the installation's repositories."
+      );
+    }
+    const required2 = missingPermissions(
+      installation,
+      APP_REQUIRED_PERMISSIONS
+    );
+    if (required2.length > 0) {
+      return check2(
+        subject,
+        "fail",
+        `The App lacks ${required2.join(", ")}; it cannot merge or review.`
+      );
+    }
+    const recommended = missingPermissions(
+      installation,
+      APP_RECOMMENDED_PERMISSIONS
+    );
+    return recommended.length > 0 ? check2(
+      subject,
+      "warn",
+      `The App lacks ${recommended.join(", ")}; add them for the pipeline's comments as the App (ADR 0005).`
+    ) : check2(
+      subject,
+      "ok",
+      "Installed with the permissions it needs."
+    );
+  } catch (error62) {
+    return check2(
+      subject,
+      "fail",
+      messageOf(error62)
+    );
+  }
+}
+function missingPermissions(installation, wanted) {
+  return Object.entries(wanted).filter(([
+    name,
+    level
+  ]) => (PERMISSION_RANK[installation.permissions[name] ?? ""] ?? 0) < (PERMISSION_RANK[level] ?? 0)).map(([
+    name,
+    level
+  ]) => `${name}: ${level}`);
 }
 async function checkBoard(dependencies) {
   const { config: config2 } = dependencies;
@@ -34526,7 +34596,7 @@ var GitHubAppTokens = class {
    * @throws when the App is not installed on the repository (GitHub's 404).
    */
   async tokenFor(repository) {
-    const installation = await this.installationOf(repository);
+    const installation = await this.installationIdOf(repository);
     const cached2 = this.tokens.get(installation);
     if (cached2 !== void 0 && cached2.expiresAt - RENEW_BEFORE_MS > this.now().getTime()) {
       return cached2.token;
@@ -34542,7 +34612,32 @@ var GitHubAppTokens = class {
     );
     return data.token;
   }
+  /**
+   * The App's installation on the repository, with its permissions; `undefined` when it is not installed.
+   * `doctor` reads it.
+   */
   async installationOf(repository) {
+    const app = await this.appClient();
+    try {
+      const { data } = await app.rest.apps.getRepoInstallation(splitRepository(repository));
+      const permissions = {};
+      for (const [
+        name,
+        level
+      ] of Object.entries(data.permissions)) {
+        if (typeof level === "string") {
+          permissions[name] = level;
+        }
+      }
+      return { permissions };
+    } catch (error62) {
+      if (isNotFound(error62)) {
+        return void 0;
+      }
+      throw error62;
+    }
+  }
+  async installationIdOf(repository) {
     const { owner } = splitRepository(repository);
     const known = this.installations.get(owner);
     if (known !== void 0) {
@@ -36096,11 +36191,13 @@ async function doctor(environment, options) {
     config2,
     tokenFrom(environment)
   );
+  const app = appCredentials(environment);
   const report = await diagnose({
     config: config2,
     board,
     repoHost,
-    context: new RepositoryContextProvider(repositoryFiles(repoHost))
+    context: new RepositoryContextProvider(repositoryFiles(repoHost)),
+    ...app === void 0 ? {} : { app: environment.inspectApp(app) }
   });
   environment.stdout(options.json ? JSON.stringify(
     report,
@@ -36443,6 +36540,7 @@ process.exitCode = await runProgram(
     )),
     connectMerger: (token) => new GitHubMerger(createGitHubClient({ token })),
     connectAppMerger: (credentials) => appMerger(appTokens(credentials)),
+    inspectApp: appTokens,
     connectAgents: (config2, token) => ({
       workspaces: new GitWorkspaces({
         directory: cacheDirectory(),

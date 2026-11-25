@@ -199,6 +199,56 @@ describe('GitHubAppTokens', () => {
   });
 });
 
+describe('GitHubAppTokens: installations', () => {
+  it('reads the installation\'s permissions, and says when the App is not installed', async () => {
+    const tokens = new GitHubAppTokens(
+      {
+        appId: '1',
+        privateKey: () => Promise.resolve(KEYS.privateKey),
+      },
+      {
+        fetch: new GitHubReplay([
+          {
+            ...INSTALLATION,
+            body: {
+              id: 7,
+              permissions: {
+                contents: 'write',
+                pull_requests: 'write',
+                metadata: 'read',
+              },
+            },
+          },
+          {
+            method: 'GET',
+            path: '/repos/acme/other/installation',
+            status: 404,
+            body: { message: 'Not Found' },
+          },
+          {
+            method: 'GET',
+            path: '/repos/acme/down/installation',
+            status: 500,
+            body: { message: 'Server Error' },
+          },
+        ]).fetch,
+        now: () => NOW,
+      },
+    );
+
+    expect(await tokens.installationOf('acme/app')).toEqual({
+      permissions: {
+        contents: 'write',
+        pull_requests: 'write',
+        metadata: 'read',
+      },
+    });
+
+    expect(await tokens.installationOf('acme/other')).toBeUndefined();
+    await expect(tokens.installationOf('acme/down')).rejects.toMatchObject({ status: 500 });
+  });
+});
+
 describe('appMerger', () => {
   it('merges with the installation token of the pull request\'s repository', async () => {
     const {
