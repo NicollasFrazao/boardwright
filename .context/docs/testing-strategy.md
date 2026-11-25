@@ -32,6 +32,11 @@ path, so a missing fixture is never mistaken for a 404.
 End-to-end runs against a real board and a sandbox repository are manual checks listed in the pull
 request of each phase (#5–#8), not CI jobs: they need tokens and an agent.
 
+The fakes accept whatever the code sends, so they cannot catch an input the real Claude Code CLI
+rejects. The first real run (#41) found one: the report schemas declared a JSON Schema draft the CLI
+does not know (#42). When the provider hands the SDK something the CLI validates, test it the way the
+CLI does, as `report-schemas.test.ts` compiles the schemas with a draft-07 validator.
+
 ## Running Tests
 
 ```bash

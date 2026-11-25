@@ -103,8 +103,10 @@ artifact or dotcontext harness trace. Logs are JSON and redact any value read fr
 
 - The issue text is untrusted input to a model; the controls above limit what it can cause, not what
   it can say. Labelling an issue is a trust decision.
-- Subscription use through the Agent SDK in third-party tools: the current terms are checked in #5
-  and the result recorded here.
+- Subscription use: the terms check of #5 is recorded in
+  [ADR 0004](./adr/0004-agent-credentials-through-documented-methods.md). boardwright never offers,
+  detects or handles a claude.ai login, and does not decide whether a person may run their own tools on
+  their own subscription; that is between them and Anthropic's terms.
 
 ## Incident Response
 

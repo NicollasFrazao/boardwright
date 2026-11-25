@@ -5,8 +5,10 @@ agent role — refine, implement, review, address feedback, and optionally merge
 boardwright moves cards through that flow the way a person would: on a branch, through a pull request,
 under your rulesets and required checks.
 
-> **Status: v0.1.2, early.** The pipeline runs end to end in tests; a run with a real agent on a
-> sandbox repository is still pending. The roadmap is
+> **Status: v0.1.2, early.** The implement stage has run end to end with a real agent on the local
+> runner ([#41](https://github.com/NicollasFrazao/boardwright/issues/41) →
+> [#44](https://github.com/NicollasFrazao/boardwright/pull/44)); the Action and the merge stage have
+> not yet run with a real agent. The roadmap is
 > [issue #1](https://github.com/NicollasFrazao/boardwright/issues/1).
 
 ## How it works
