@@ -12,5 +12,8 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.331",
     "@boardwright/core": "0.0.0",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
   }
 }
