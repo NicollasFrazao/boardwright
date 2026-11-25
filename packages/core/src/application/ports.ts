@@ -1,4 +1,5 @@
 import type { RepositoryPermission } from '../domain/guard-rails.ts';
+import type { MergeFacts } from '../domain/merge-policy.ts';
 import type {
   IssueComment,
   IssueRef,
@@ -61,6 +62,27 @@ export interface ReviewComment {
   readonly path: string;
   readonly line: number;
   readonly body: string;
+}
+
+/** How the pipeline merges a pull request that passed the policy. */
+export interface MergeRequest {
+  readonly repository: string;
+  readonly number: number;
+  readonly pullRequestId: string;
+  readonly headSha: string;
+  readonly method: 'squash' | 'merge' | 'rebase';
+}
+
+/**
+ * Merges pull requests, with its own token: the identity that merges is not the one that opened.
+ *
+ * @remarks
+ * It never bypasses the ruleset: a pull request the ruleset still holds gets native auto-merge, which
+ * completes only when the required checks pass.
+ */
+export interface MergerPort {
+  /** `merged` when it merged now, `auto-merge` when GitHub will merge once the ruleset allows. */
+  merge(request: MergeRequest): Promise<'merged' | 'auto-merge'>;
 }
 
 /** An unresolved review thread, with its latest comment. */
@@ -129,6 +151,9 @@ export interface RepoHostPort {
 
   /** Marks a review thread resolved; only the pipeline does this, for threads the agent addressed. */
   resolveThread(threadId: string): Promise<void>;
+
+  /** What the merge policy looks at, read fresh from the pull request. */
+  getMergeFacts(repository: string, number: number): Promise<MergeFacts>;
 
   /** Whether the pipeline already reviewed the pull request at this head commit. */
   hasAgentReview(repository: string, number: number, headSha: string): Promise<boolean>;

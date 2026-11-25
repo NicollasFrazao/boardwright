@@ -1,5 +1,6 @@
 import type {
   AgentProvider,
+  AgentStageConfig,
   AgentRequest,
   AgentResult,
   BoardDescription,
@@ -14,6 +15,9 @@ import type {
   IssueRef,
   LabelActor,
   Logger,
+  MergeFacts,
+  MergeRequest,
+  MergerPort,
   PipelineConfig,
   PullRequest,
   PullRequestDraft,
@@ -131,6 +135,9 @@ export class FakeRepoHost implements RepoHostPort {
 
   readonly drafts: PullRequestDraft[] = [];
 
+  /** Merge facts per pull request number. */
+  readonly mergeFacts = new Map<number, MergeFacts>();
+
   /** Feedback per pull request number; none means nothing to address. */
   readonly feedback = new Map<number, Feedback>();
 
@@ -158,6 +165,16 @@ export class FakeRepoHost implements RepoHostPort {
 
   constructor(clock: FakeClock) {
     this.clock = clock;
+  }
+
+  /** The merge facts the test set; rejects when there are none. */
+  getMergeFacts(
+    _repository: string,
+    number: number,
+  ): Promise<MergeFacts> {
+    const facts = this.mergeFacts.get(number);
+
+    return facts === undefined ? Promise.reject(new Error(`No merge facts for #${number}`)) : Promise.resolve(facts);
   }
 
   /** The feedback the test set for the pull request. */
@@ -453,6 +470,20 @@ export class FakeContext implements ContextProvider {
   }
 }
 
+/** A merger that records requests and answers with `result`. */
+export class FakeMerger implements MergerPort {
+  result: 'merged' | 'auto-merge' = 'merged';
+
+  readonly requests: MergeRequest[] = [];
+
+  /** Records the request; returns `result`. */
+  merge(request: MergeRequest): Promise<'merged' | 'auto-merge'> {
+    this.requests.push(request);
+
+    return Promise.resolve(this.result);
+  }
+}
+
 /** Run ids `run-1`, `run-2`, … */
 export class SequentialRunIds implements RunIdSource {
   private count = 0;
@@ -507,13 +538,16 @@ export const ISSUE: IssueRef = {
 /**
  * The first stage of a config.
  *
- * @throws {@link Error} when the config has no stage, which fails the test.
+ * @throws {@link Error} when the config's first stage is missing or runs no agent, which fails the test.
  */
-export function firstStage(config: PipelineConfig): PipelineConfig['stages'][number] {
+export function firstStage(config: PipelineConfig): AgentStageConfig {
   const [stage] = config.stages;
 
-  if (stage === undefined) {
-    throw new Error('The config has no stage');
+  if (
+    stage === undefined
+    || stage.id === 'merge'
+  ) {
+    throw new Error('The config has no agent stage first');
   }
 
   return stage;
@@ -542,6 +576,7 @@ export interface Scenario {
   readonly context: FakeContext;
   readonly clock: FakeClock;
   readonly logger: MemoryLogger;
+  readonly merger: FakeMerger;
 }
 
 /** A scenario with one triggered issue in Ready; the config can be overridden. */
@@ -561,6 +596,7 @@ export function scenario(config: PipelineConfig = baseConfig()): Scenario {
   const agent = new FakeAgent();
   const context = new FakeContext();
   const logger = new MemoryLogger();
+  const merger = new FakeMerger();
 
   repoHost.issues.set(
     keyOf(ISSUE),
@@ -597,6 +633,7 @@ export function scenario(config: PipelineConfig = baseConfig()): Scenario {
       clock,
       runIds: new SequentialRunIds(),
       logger,
+      merger,
     },
     board,
     repoHost,
@@ -605,5 +642,6 @@ export function scenario(config: PipelineConfig = baseConfig()): Scenario {
     context,
     clock,
     logger,
+    merger,
   };
 }

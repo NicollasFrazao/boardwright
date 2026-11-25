@@ -99,6 +99,38 @@ const refineStage = z.object({
   ...limitsOverride,
 }).strict();
 
+/** Paths whose changes always wait for a person to merge. */
+export const DEFAULT_MERGE_DENIED_PATHS: readonly string[] = [
+  '.github/**',
+  '**/migrations/**',
+  '**/*.lock',
+  '**/package-lock.json',
+];
+
+const DEFAULT_MAX_CHANGED_LINES = 400;
+
+/** Each evaluation of a new head is an attempt; merges see more rounds than agent stages. */
+const DEFAULT_MERGE_ROUNDS = 10;
+
+const mergeStage = z.object({
+  id: z.literal('merge'),
+  when: z.object({ status: statusName }).prefault({ status: 'In review' }),
+  method: z.enum([
+    'squash',
+    'merge',
+    'rebase',
+  ]).default('squash'),
+  require: z.object({
+    agentApproval: z.boolean().default(true),
+    maxChangedLines: z.int().positive().default(DEFAULT_MAX_CHANGED_LINES),
+    deniedPaths: z.array(z.string().min(1)).default([...DEFAULT_MERGE_DENIED_PATHS]),
+    optInLabel: z.string().min(1).nullable().default('agent-merge'),
+    optOutLabel: z.string().min(1).default('needs-human'),
+  }).strict().prefault({}),
+  maxAttempts: z.int().positive().default(DEFAULT_MERGE_ROUNDS),
+  timeoutMinutes: z.int().positive().optional(),
+}).strict();
+
 const stage = z.discriminatedUnion(
   'id',
   [
@@ -106,6 +138,7 @@ const stage = z.discriminatedUnion(
     reviewStage,
     addressFeedbackStage,
     refineStage,
+    mergeStage,
   ],
 );
 
@@ -150,6 +183,9 @@ export type PipelineConfig = z.output<typeof pipelineConfigSchema>;
 
 /** One stage of a validated configuration. */
 export type StageConfig = PipelineConfig['stages'][number];
+
+/** A stage that runs an agent with a playbook; every stage but merge. */
+export type AgentStageConfig = Exclude<StageConfig, { id: 'merge' }>;
 
 /** The limits that apply to one stage: its own overrides over the global guard rails. */
 export interface StageLimits {
@@ -204,7 +240,7 @@ export function stageLimits(
   const timeoutMinutes = stageConfig.timeoutMinutes ?? config.guardRails.timeoutMinutes;
 
   return {
-    maxTurns: stageConfig.maxTurns ?? config.guardRails.maxTurns,
+    maxTurns: ('maxTurns' in stageConfig ? stageConfig.maxTurns : undefined) ?? config.guardRails.maxTurns,
     timeoutMs: timeoutMinutes * MS_PER_MINUTE,
     maxAttempts: stageConfig.maxAttempts ?? config.guardRails.maxAttempts,
     staleAfterMs: (timeoutMinutes + STALE_GRACE_MINUTES) * MS_PER_MINUTE,

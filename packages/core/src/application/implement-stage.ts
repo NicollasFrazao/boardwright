@@ -1,6 +1,6 @@
 import { findDeniedPaths } from '../domain/guard-rails.ts';
 import type { RunOutcomeEvent } from '../domain/pipeline.ts';
-import type { StageConfig } from './config.ts';
+import type { AgentStageConfig } from './config.ts';
 import type {
   AgentProvider,
   ContextProvider,
@@ -30,7 +30,7 @@ export interface ImplementStageDependencies {
 /** One run of the implement stage. */
 export interface ImplementRun {
   readonly issue: Issue;
-  readonly stage: StageConfig;
+  readonly stage: AgentStageConfig;
   readonly deniedPaths: readonly string[];
   readonly maxTurns: number;
   readonly timeoutMs: number;
@@ -159,7 +159,7 @@ async function implementIn(
 
 /** The playbook for an issue: the first label with an override wins, else the stage's default. */
 export function selectAgent(
-  stage: StageConfig,
+  stage: AgentStageConfig,
   labels: readonly string[],
 ): string {
   for (const label of labels) {

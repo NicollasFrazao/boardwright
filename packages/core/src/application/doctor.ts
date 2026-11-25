@@ -1,4 +1,5 @@
 import type {
+  AgentStageConfig,
   PipelineConfig,
   StageConfig,
 } from './config.ts';
@@ -130,7 +131,7 @@ async function checkRepository(
           ),
     ];
 
-    for (const stage of dependencies.config.stages) {
+    for (const stage of dependencies.config.stages.filter(runsAnAgent)) {
       checks.push(...await checkContext(
         dependencies,
         repository,
@@ -148,10 +149,14 @@ async function checkRepository(
   }
 }
 
+function runsAnAgent(stage: StageConfig): stage is AgentStageConfig {
+  return stage.id !== 'merge';
+}
+
 async function checkContext(
   dependencies: DoctorDependencies,
   repository: string,
-  stage: StageConfig,
+  stage: AgentStageConfig,
 ): Promise<DoctorCheck[]> {
   const subject = `${repository} ${stage.id}`;
 
@@ -219,6 +224,7 @@ function statusesOf(stage: StageConfig): string[] {
       ];
     case 'review':
     case 'address-feedback':
+    case 'merge':
       return [stage.when.status];
   }
 }

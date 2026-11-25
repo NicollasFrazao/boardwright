@@ -29,10 +29,12 @@ export {
 } from './domain/run-marker.ts';
 export {
   DEFAULT_DENIED_PATHS,
+  DEFAULT_MERGE_DENIED_PATHS,
   InvalidConfigError,
   parsePipelineConfig,
   pipelineConfigSchema,
   stageLimits,
+  type AgentStageConfig,
   type PipelineConfig,
   type StageConfig,
   type StageLimits,
@@ -98,3 +100,25 @@ export {
   PLAN_MARKER,
   runRefineStage,
 } from './application/refine-stage.ts';
+export {
+  evaluateMergePolicy,
+  failureKey,
+  formatMergeMarker,
+  parseMergeMarker,
+  type ChecksState,
+  type MergeEvaluation,
+  type MergeFacts,
+  type MergeMarker,
+  type MergePolicy,
+  type Mergeability,
+  type PolicyFailure,
+} from './domain/merge-policy.ts';
+export {
+  isDecided,
+  judge,
+  policyOf,
+  runMergeStage,
+  type MergeJudgement,
+  type MergeStageConfig,
+  type MergeStageDependencies,
+} from './application/merge-stage.ts';
