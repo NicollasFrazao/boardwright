@@ -1,9 +1,9 @@
-name: boardwright
+name: boardwright pipeline
 description: Run one tick of a boardwright pipeline, where the columns of a GitHub Project hand issues to coding agents.
 author: Nícollas Frazão
 
 branding:
-  icon: columns
+  icon: layout
   color: purple
 
 inputs:

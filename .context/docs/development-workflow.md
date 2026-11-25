@@ -71,7 +71,9 @@ opens pull requests (ADR 0003). Clones and worktrees live in
      `dist/` is up to date, then publishes `build/npm` to npm through trusted publishing (OIDC, with
      provenance; no token is stored).
 - The Action is used by tag or commit of this repository. Its Marketplace listing is updated by ticking
-  "Publish this Action to the GitHub Marketplace" on the release.
+  "Publish this Action to the GitHub Marketplace" on the release. The Marketplace reads `action.yml` at
+  the release's tag, and refuses a `name` that matches an existing action, user or organization (the
+  `boardwright` organization is someone else's) and an icon outside GitHub's supported Feather list.
 
 ## Recipes
 
