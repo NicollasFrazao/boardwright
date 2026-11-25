@@ -109,6 +109,8 @@ jobs:
         with:
           github-token: ${{ secrets.BOARDWRIGHT_GITHUB_TOKEN }}
           # merge-token: ${{ secrets.BOARDWRIGHT_MERGE_TOKEN }}  # only with a merge stage
+          # app-id: ${{ vars.BOARDWRIGHT_APP_ID }}               # the pipeline's GitHub App (ADR 0005), instead of merge-token
+          # app-private-key: ${{ secrets.BOARDWRIGHT_APP_PRIVATE_KEY }}
           # dry-run: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
