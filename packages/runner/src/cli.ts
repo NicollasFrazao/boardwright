@@ -175,7 +175,7 @@ process.exitCode = await runProgram(
         repoHost: new GitHubRepoHost(
           client,
           app === undefined ? {} : {
-            reviewer: (repository) => appTokens(app).clientFor(repository),
+            actor: (repository) => appTokens(app).clientFor(repository),
             trustedAuthors: async () => [await appTokens(app).botLogin()],
           },
         ),

@@ -28229,7 +28229,10 @@ async function addressIn(dependencies, run3, round) {
   const known = new Set(round.feedback.threads.map((thread) => thread.id));
   const resolved = [...new Set(result.addressedThreadIds)].filter((id) => known.has(id));
   for (const threadId of resolved) {
-    await dependencies.repoHost.resolveThread(threadId);
+    await dependencies.repoHost.resolveThread(
+      round.workspace.repository,
+      threadId
+    );
   }
   return outcome2(
     "succeeded",
@@ -35053,13 +35056,17 @@ var REVIEW_EVENTS = {
 };
 var GitHubRepoHost = class {
   client;
-  reviewer;
+  actor;
   trustedAuthors;
   trusted;
   constructor(client, options = {}) {
     this.client = client;
-    this.reviewer = options.reviewer;
+    this.actor = options.actor;
     this.trustedAuthors = options.trustedAuthors;
+  }
+  /** The client the pipeline writes as on the repository: its App's installation, else the main client. */
+  async actorFor(repository) {
+    return this.actor === void 0 ? this.client : await this.actor(repository);
   }
   /**
    * Whether a comment or a review by this login may carry the pipeline's markers: only the pipeline's own
@@ -35196,9 +35203,10 @@ var GitHubRepoHost = class {
       createdAt: new Date(comment.created_at)
     }));
   }
-  /** Posts a comment on the issue. */
+  /** Posts a comment on the issue, as the pipeline's actor. */
   async addComment(ref, body) {
-    await this.client.rest.issues.createComment({
+    const client = await this.actorFor(ref.repository);
+    await client.rest.issues.createComment({
       ...splitRepository(ref.repository),
       issue_number: ref.number,
       body
@@ -35286,8 +35294,9 @@ var GitHubRepoHost = class {
     };
   }
   /** Marks a review thread resolved. */
-  async resolveThread(threadId) {
-    await this.client.graphql(
+  async resolveThread(repository, threadId) {
+    const client = await this.actorFor(repository);
+    await client.graphql(
       RESOLVE_THREAD_MUTATION,
       { id: threadId }
     );
@@ -35350,15 +35359,15 @@ var GitHubRepoHost = class {
     return ours.some((review) => review.commit_id === headSha && parseReviewMarker(review.body)?.headSha === headSha);
   }
   /**
-   * Posts a review with its line comments, as a comment, an approval or a change request, on the reviewer's
-   * client when there is one.
+   * Posts a review with its line comments, as a comment, an approval or a change request, as the pipeline's
+   * actor.
    *
    * @remarks
    * GitHub rejects the whole review (422) when one comment points at a line outside the diff; the review is
    * then posted again with the comments in its body, so no finding is lost.
    */
   async submitReview(review) {
-    const client = this.reviewer === void 0 ? this.client : await this.reviewer(review.repository);
+    const client = await this.actorFor(review.repository);
     const target = {
       ...splitRepository(review.repository),
       pull_number: review.number,
@@ -36645,7 +36654,7 @@ process.exitCode = await runProgram(
         repoHost: new GitHubRepoHost(
           client,
           app === void 0 ? {} : {
-            reviewer: (repository) => appTokens(app).clientFor(repository),
+            actor: (repository) => appTokens(app).clientFor(repository),
             trustedAuthors: async () => [await appTokens(app).botLogin()]
           }
         )

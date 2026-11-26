@@ -176,8 +176,8 @@ export interface RepoHostPort {
   /** The unresolved review threads and the failing checks of the head commit of a pull request. */
   getFeedback(repository: string, number: number): Promise<Feedback>;
 
-  /** Marks a review thread resolved; only the pipeline does this, for threads the agent addressed. */
-  resolveThread(threadId: string): Promise<void>;
+  /** Marks a review thread of the repository resolved; only the pipeline does this, for threads the agent addressed. */
+  resolveThread(repository: string, threadId: string): Promise<void>;
 
   /** What the merge policy looks at, read fresh from the pull request. */
   getMergeFacts(repository: string, number: number): Promise<MergeFacts>;

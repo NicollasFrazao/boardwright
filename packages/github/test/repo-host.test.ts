@@ -429,6 +429,80 @@ describe('GitHubRepoHost: repository and pull requests', () => {
   });
 });
 
+describe('GitHubRepoHost: the pipeline\'s actor', () => {
+  it('posts comments and resolves threads as the actor, and reads with the main token', async () => {
+    const replay = new GitHubReplay([
+      {
+        method: 'POST',
+        path: '/repos/acme/app/issues/7/comments',
+        status: 201,
+        body: { id: 1 },
+      },
+      {
+        method: 'POST',
+        path: '/graphql',
+        query: 'resolveReviewThread',
+        body: { data: { resolveReviewThread: { thread: { id: 'PRRT_1' } } } },
+      },
+      {
+        method: 'GET',
+        path: '/repos/acme/app/issues/7',
+        body: {
+          title: 'x',
+          body: null,
+          state: 'open',
+          labels: [],
+        },
+      },
+    ]);
+
+    const authorizations: string[] = [];
+
+    const recordingFetch = (token: string): typeof fetch => (
+      input,
+      init,
+    ) => {
+      authorizations.push(`${token}:${new Headers(init?.headers).get('authorization') ?? ''}`);
+
+      return replay.fetch(
+        input,
+        init,
+      );
+    };
+
+    const host = new GitHubRepoHost(
+      createGitHubClient({
+        token: 'main-token',
+        fetch: recordingFetch('main'),
+      }),
+      {
+        actor: () => Promise.resolve(createGitHubClient({
+          token: 'app-token',
+          fetch: recordingFetch('app'),
+        })),
+      },
+    );
+
+    await host.addComment(
+      ISSUE,
+      'A notice.',
+    );
+
+    await host.resolveThread(
+      'acme/app',
+      'PRRT_1',
+    );
+
+    await host.getIssue(ISSUE);
+
+    expect(authorizations).toEqual([
+      'app:token app-token',
+      'app:token app-token',
+      'main:token main-token',
+    ]);
+  });
+});
+
 describe('GitHubRepoHost: labels and files', () => {
   it.each([
     [
@@ -739,7 +813,7 @@ describe('GitHubRepoHost: reviews', () => {
       'request-changes',
       'REQUEST_CHANGES',
     ],
-  ] as const)('submits a %s verdict as %s on the reviewer\'s client', async (
+  ] as const)('submits a %s verdict as %s as the pipeline\'s actor', async (
     event,
     githubEvent,
   ) => {
@@ -760,7 +834,7 @@ describe('GitHubRepoHost: reviews', () => {
         fetch: replay.fetch,
       }),
       {
-        reviewer: (repository) => {
+        actor: (repository) => {
           reviewed.push(repository);
 
           return Promise.resolve(createGitHubClient({
@@ -992,7 +1066,10 @@ describe('GitHubRepoHost: feedback', () => {
       },
     ]);
 
-    await host.resolveThread('PRRT_1');
+    await host.resolveThread(
+      'acme/app',
+      'PRRT_1',
+    );
 
     expect(replay.nth(0).body).toMatchObject({ variables: { id: 'PRRT_1' } });
   });
