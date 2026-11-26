@@ -36636,7 +36636,7 @@ function jsonLogger(environment) {
 }
 
 // package.json
-var package_default = { version: "0.1.7" };
+var package_default = { version: "0.1.8" };
 
 // packages/runner/src/cli.ts
 function hasCode(error62, code) {
