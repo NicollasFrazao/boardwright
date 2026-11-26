@@ -254,7 +254,7 @@ are set.
 - [`examples/full-pipeline.config.yml`](examples/full-pipeline.config.yml) — refine, implement, review and
   address feedback over two repositories; a person merges.
 - [`examples/agentic-merge.config.yml`](examples/agentic-merge.config.yml) — implement, review, address
-  feedback and the merge stage with a gatekeeper.
+  feedback and the merge stage with a gatekeeper; the review approves as the pipeline's GitHub App.
 
 ## Safety model
 
