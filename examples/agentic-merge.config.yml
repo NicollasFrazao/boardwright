@@ -4,7 +4,8 @@
 # opens pull requests:
 # - preferably the pipeline's GitHub App (ADR 0005), set with BOARDWRIGHT_APP_ID and
 #   BOARDWRIGHT_APP_PRIVATE_KEY_FILE (or BOARDWRIGHT_APP_PRIVATE_KEY in CI);
-# - otherwise BOARDWRIGHT_MERGE_TOKEN, a token of another account.
+# - otherwise BOARDWRIGHT_MERGE_TOKEN, a token of another account (then drop approve from the review
+#   stage).
 project:
   owner: your-login
   number: 1
@@ -13,7 +14,8 @@ repositories:
 stages:
   - id: implement
   - id: review
-    # The App submits the verdict as an approval or a change request; turning it on is a trust decision.
+    # Needs the GitHub App: the App submits the verdict as an approval or a change request; turning
+    # it on is a trust decision.
     approve: true
   - id: address-feedback
   - id: merge
