@@ -102,7 +102,7 @@ const MERGE_FACTS_QUERY = `query($owner: String!, $name: String!, $number: Int!)
       labels(first: 50) { nodes { name } }
       files(first: 100) { nodes { path } }
       reviewThreads(first: 100) { nodes { isResolved } }
-      reviews(last: 50) { nodes { body commit { oid } } }
+      reviews(last: 50) { nodes { body author { login } commit { oid } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
     }
   }
@@ -132,6 +132,7 @@ interface MergeFactsQuery {
       readonly reviews: {
         readonly nodes: readonly {
           readonly body: string;
+          readonly author: { readonly login: string } | null;
           readonly commit: { readonly oid: string } | null;
         }[];
       };
@@ -226,6 +227,22 @@ export interface GitHubRepoHostOptions {
    * approve a pull request that the main token opened. Without it, reviews go out on the main client.
    */
   readonly reviewer?: (repository: string) => Promise<GitHubClient>;
+
+  /**
+   * The logins of the pipeline's other identities, such as its GitHub App's bot. Markers count only when the
+   * main token's account or one of these wrote them.
+   */
+  readonly trustedAuthors?: () => Promise<readonly string[]>;
+}
+
+const VIEWER_QUERY = 'query { viewer { login } }';
+
+/** A login as both APIs give it: REST names a bot `app[bot]`, GraphQL `app`; case does not matter. */
+function normalizeLogin(login: string): string {
+  return login.replace(
+    /\[bot\]$/u,
+    '',
+  ).toLowerCase();
 }
 
 const REVIEW_EVENTS = {
@@ -240,12 +257,56 @@ export class GitHubRepoHost implements RepoHostPort {
 
   private readonly reviewer: GitHubRepoHostOptions['reviewer'];
 
+  private readonly trustedAuthors: GitHubRepoHostOptions['trustedAuthors'];
+
+  private trusted: Promise<ReadonlySet<string>> | undefined;
+
   constructor(
     client: GitHubClient,
     options: GitHubRepoHostOptions = {},
   ) {
     this.client = client;
     this.reviewer = options.reviewer;
+    this.trustedAuthors = options.trustedAuthors;
+  }
+
+  /**
+   * Whether a comment or a review by this login may carry the pipeline's markers: only the pipeline's own
+   * identities may, so nobody else can forge a run's history or a review's verdict.
+   */
+  private async isTrusted(login: string | undefined): Promise<boolean> {
+    if (login === undefined) {
+      return false;
+    }
+
+    this.trusted ??= this.loadTrusted();
+
+    return (await this.trusted).has(normalizeLogin(login));
+  }
+
+  private async loadTrusted(): Promise<ReadonlySet<string>> {
+    const { viewer } = await this.client.graphql<{ viewer: { login: string } }>(VIEWER_QUERY);
+
+    return new Set([
+      viewer.login,
+      ...await this.trustedAuthors?.() ?? [],
+    ].map(normalizeLogin));
+  }
+
+  /** The items whose author is one of the pipeline's identities, in their order. */
+  private async byPipeline<T>(
+    items: readonly T[],
+    authorOf: (item: T) => string | undefined,
+  ): Promise<T[]> {
+    const kept: T[] = [];
+
+    for (const item of items) {
+      if (await this.isTrusted(authorOf(item))) {
+        kept.push(item);
+      }
+    }
+
+    return kept;
   }
 
   /** The issue's title, body, label names and whether it is open. */
@@ -364,7 +425,12 @@ export class GitHubRepoHost implements RepoHostPort {
       },
     );
 
-    return comments.map((comment) => ({
+    const ours = await this.byPipeline(
+      comments,
+      (comment) => comment.user?.login,
+    );
+
+    return ours.map((comment) => ({
       id: String(comment.id).padStart(
         COMMENT_ID_WIDTH,
         '0',
@@ -524,7 +590,12 @@ export class GitHubRepoHost implements RepoHostPort {
     const pullRequest = data.repository.pullRequest;
     const headSha = pullRequest.headRefOid;
 
-    const verdicts = pullRequest.reviews.nodes
+    const ours = await this.byPipeline(
+      pullRequest.reviews.nodes,
+      (review) => review.author?.login,
+    );
+
+    const verdicts = ours
       .filter((review) => review.commit?.oid === headSha)
       .map((review) => parseReviewMarker(review.body))
       .filter((marker) => marker?.headSha === headSha);
@@ -559,7 +630,12 @@ export class GitHubRepoHost implements RepoHostPort {
       },
     );
 
-    return reviews.some((review) => review.commit_id === headSha
+    const ours = await this.byPipeline(
+      reviews,
+      (review) => review.user?.login,
+    );
+
+    return ours.some((review) => review.commit_id === headSha
       && parseReviewMarker(review.body)?.headSha === headSha);
   }
 

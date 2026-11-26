@@ -34642,6 +34642,12 @@ var GitHubAppTokens = class {
       throw error62;
     }
   }
+  /** The login the App acts as, `<slug>[bot]`: the author of what it writes. */
+  async botLogin() {
+    const app = await this.appClient();
+    const { data } = await app.rest.apps.getAuthenticated();
+    return `${data?.slug ?? ""}[bot]`;
+  }
   async installationIdOf(repository) {
     const { owner } = splitRepository(repository);
     const known = this.installations.get(owner);
@@ -34980,7 +34986,7 @@ var MERGE_FACTS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
       labels(first: 50) { nodes { name } }
       files(first: 100) { nodes { path } }
       reviewThreads(first: 100) { nodes { isResolved } }
-      reviews(last: 50) { nodes { body commit { oid } } }
+      reviews(last: 50) { nodes { body author { login } commit { oid } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
     }
   }
@@ -35033,6 +35039,13 @@ var RECENT_ISSUES_QUERY = `query($owner: String!, $name: String!, $after: String
     }
   }
 }`;
+var VIEWER_QUERY = "query { viewer { login } }";
+function normalizeLogin(login) {
+  return login.replace(
+    /\[bot\]$/u,
+    ""
+  ).toLowerCase();
+}
 var REVIEW_EVENTS = {
   comment: "COMMENT",
   approve: "APPROVE",
@@ -35041,9 +35054,40 @@ var REVIEW_EVENTS = {
 var GitHubRepoHost = class {
   client;
   reviewer;
+  trustedAuthors;
+  trusted;
   constructor(client, options = {}) {
     this.client = client;
     this.reviewer = options.reviewer;
+    this.trustedAuthors = options.trustedAuthors;
+  }
+  /**
+   * Whether a comment or a review by this login may carry the pipeline's markers: only the pipeline's own
+   * identities may, so nobody else can forge a run's history or a review's verdict.
+   */
+  async isTrusted(login) {
+    if (login === void 0) {
+      return false;
+    }
+    this.trusted ??= this.loadTrusted();
+    return (await this.trusted).has(normalizeLogin(login));
+  }
+  async loadTrusted() {
+    const { viewer } = await this.client.graphql(VIEWER_QUERY);
+    return new Set([
+      viewer.login,
+      ...await this.trustedAuthors?.() ?? []
+    ].map(normalizeLogin));
+  }
+  /** The items whose author is one of the pipeline's identities, in their order. */
+  async byPipeline(items, authorOf) {
+    const kept = [];
+    for (const item of items) {
+      if (await this.isTrusted(authorOf(item))) {
+        kept.push(item);
+      }
+    }
+    return kept;
   }
   /** The issue's title, body, label names and whether it is open. */
   async getIssue(ref) {
@@ -35139,7 +35183,11 @@ var GitHubRepoHost = class {
         per_page: 100
       }
     );
-    return comments.map((comment) => ({
+    const ours = await this.byPipeline(
+      comments,
+      (comment) => comment.user?.login
+    );
+    return ours.map((comment) => ({
       id: String(comment.id).padStart(
         COMMENT_ID_WIDTH,
         "0"
@@ -35266,7 +35314,11 @@ var GitHubRepoHost = class {
     );
     const pullRequest = data.repository.pullRequest;
     const headSha = pullRequest.headRefOid;
-    const verdicts = pullRequest.reviews.nodes.filter((review) => review.commit?.oid === headSha).map((review) => parseReviewMarker(review.body)).filter((marker) => marker?.headSha === headSha);
+    const ours = await this.byPipeline(
+      pullRequest.reviews.nodes,
+      (review) => review.author?.login
+    );
+    const verdicts = ours.filter((review) => review.commit?.oid === headSha).map((review) => parseReviewMarker(review.body)).filter((marker) => marker?.headSha === headSha);
     return {
       pullRequestId: pullRequest.id,
       headSha,
@@ -35291,7 +35343,11 @@ var GitHubRepoHost = class {
         per_page: 100
       }
     );
-    return reviews.some((review) => review.commit_id === headSha && parseReviewMarker(review.body)?.headSha === headSha);
+    const ours = await this.byPipeline(
+      reviews,
+      (review) => review.user?.login
+    );
+    return ours.some((review) => review.commit_id === headSha && parseReviewMarker(review.body)?.headSha === headSha);
   }
   /**
    * Posts a review with its line comments, as a comment, an approval or a change request, on the reviewer's
@@ -36588,7 +36644,10 @@ process.exitCode = await runProgram(
         ),
         repoHost: new GitHubRepoHost(
           client,
-          app === void 0 ? {} : { reviewer: (repository) => appTokens(app).clientFor(repository) }
+          app === void 0 ? {} : {
+            reviewer: (repository) => appTokens(app).clientFor(repository),
+            trustedAuthors: async () => [await appTokens(app).botLogin()]
+          }
         )
       };
     },

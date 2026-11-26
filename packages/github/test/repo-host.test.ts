@@ -22,7 +22,16 @@ function hostWith(routes: ReplayRoute[]): {
   host: GitHubRepoHost;
   replay: GitHubReplay;
 } {
-  const replay = new GitHubReplay(routes);
+  // The pipeline's own login: only its comments and reviews carry markers.
+  const replay = new GitHubReplay([
+    ...routes,
+    {
+      method: 'POST',
+      path: '/graphql',
+      query: 'viewer',
+      body: { data: { viewer: { login: 'pipeline-bot' } } },
+    },
+  ]);
 
   return {
     host: new GitHubRepoHost(createGitHubClient({
@@ -89,7 +98,7 @@ describe('GitHubRepoHost: issues and comments', () => {
     });
   });
 
-  it('reads every page of comments, padding ids so their order is their creation order', async () => {
+  it('reads the pipeline\'s comments of every page, padding ids so their order is their creation order, and drops other authors\' comments', async () => {
     const { host } = hostWith([
       {
         method: 'GET',
@@ -100,6 +109,13 @@ describe('GitHubRepoHost: issues and comments', () => {
             id: 999,
             body: 'first',
             created_at: '2026-11-24T01:55:00Z',
+            user: { login: 'pipeline-bot' },
+          },
+          {
+            id: 998,
+            body: '<!-- boardwright:run v=1 stage=implement run=x attempt=9 event=gave-up -->',
+            created_at: '2026-11-24T01:50:00Z',
+            user: { login: 'someone' },
           },
         ],
       },
@@ -111,6 +127,7 @@ describe('GitHubRepoHost: issues and comments', () => {
             id: 1000,
             body: null,
             created_at: '2026-11-24T01:55:00Z',
+            user: { login: 'Pipeline-Bot' },
           },
         ],
       },
@@ -577,9 +594,21 @@ describe('GitHubRepoHost: reviews', () => {
         {
           commit_id: 'abc1234',
           body: `${marker}\nLooks good.`,
+          user: { login: 'pipeline-bot' },
         },
       ],
       true,
+    ],
+    [
+      'a marked review of the head by someone else',
+      [
+        {
+          commit_id: 'abc1234',
+          body: `${marker}\nLooks good.`,
+          user: { login: 'someone' },
+        },
+      ],
+      false,
     ],
     [
       'only a review of an older commit',
@@ -635,6 +664,42 @@ describe('GitHubRepoHost: reviews', () => {
     ],
     event: 'comment' as const,
   };
+
+  it('trusts the reviews of the pipeline\'s GitHub App as well', async () => {
+    const replay = new GitHubReplay([
+      {
+        method: 'GET',
+        path: '/repos/acme/app/pulls/15/reviews',
+        body: [
+          {
+            commit_id: 'abc1234',
+            body: marker,
+            user: { login: 'boardwright-agent[bot]' },
+          },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/graphql',
+        query: 'viewer',
+        body: { data: { viewer: { login: 'owner' } } },
+      },
+    ]);
+
+    const host = new GitHubRepoHost(
+      createGitHubClient({
+        token: 'main-token',
+        fetch: replay.fetch,
+      }),
+      { trustedAuthors: () => Promise.resolve(['boardwright-agent[bot]']) },
+    );
+
+    expect(await host.hasAgentReview(
+      'acme/app',
+      15,
+      'abc1234',
+    )).toBe(true);
+  });
 
   it('posts a review that only comments, with its line comments on the new side', async () => {
     const {

@@ -249,6 +249,29 @@ describe('GitHubAppTokens: installations', () => {
   });
 });
 
+describe('GitHubAppTokens: the bot', () => {
+  it('names the App\'s bot from its slug', async () => {
+    const tokens = new GitHubAppTokens(
+      {
+        appId: '1',
+        privateKey: () => Promise.resolve(KEYS.privateKey),
+      },
+      {
+        fetch: new GitHubReplay([
+          {
+            method: 'GET',
+            path: '/app',
+            body: { slug: 'boardwright-agent' },
+          },
+        ]).fetch,
+        now: () => NOW,
+      },
+    );
+
+    expect(await tokens.botLogin()).toBe('boardwright-agent[bot]');
+  });
+});
+
 describe('appMerger', () => {
   it('merges with the installation token of the pull request\'s repository', async () => {
     const {
