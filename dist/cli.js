@@ -28219,24 +28219,28 @@ async function addressIn(dependencies, run3, round) {
       `The change touches denied paths: ${deniedChanges.join(", ")}. Nothing was pushed.`
     );
   }
-  if (!await dependencies.workspaces.hasCommits(round.workspace)) {
+  const known = new Set(round.feedback.threads.map((thread) => thread.id));
+  const addressed = [...new Set(result.addressedThreadIds)].filter((id) => known.has(id));
+  const hasCommits = await dependencies.workspaces.hasCommits(round.workspace);
+  if (!hasCommits && addressed.length === 0) {
     return outcome2(
       "failed",
-      "The agent committed nothing, so there is nothing to push."
+      "The agent committed nothing and addressed no thread, so there is nothing to push or resolve."
     );
   }
-  await dependencies.workspaces.push(round.workspace);
-  const known = new Set(round.feedback.threads.map((thread) => thread.id));
-  const resolved = [...new Set(result.addressedThreadIds)].filter((id) => known.has(id));
-  for (const threadId of resolved) {
+  if (hasCommits) {
+    await dependencies.workspaces.push(round.workspace);
+  }
+  for (const threadId of addressed) {
     await dependencies.repoHost.resolveThread(
       round.workspace.repository,
       threadId
     );
   }
+  const done = hasCommits ? `Pushed fixes to ${round.pullRequestUrl}` : `Pushed nothing to ${round.pullRequestUrl}: no change was needed`;
   return outcome2(
     "succeeded",
-    `Pushed fixes to ${round.pullRequestUrl}; resolved ${resolved.length} of ${round.feedback.threads.length} review threads.
+    `${done}; resolved ${addressed.length} of ${round.feedback.threads.length} review threads.
 
 ${result.summary}`
   );
