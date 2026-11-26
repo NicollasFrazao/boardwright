@@ -28849,7 +28849,15 @@ async function runReviewStage(dependencies, run3) {
   }
 }
 async function postReview(dependencies, pullRequest, repository, review) {
-  const heading = review.verdict === "approve" ? "no changes needed" : "changes needed";
+  const isApproved = review.verdict === "approve";
+  const heading = isApproved ? "no changes needed" : "changes needed";
+  const suggestions = isApproved && review.comments.length > 0 ? [
+    "",
+    "",
+    "**Suggestions** (optional, not blocking):",
+    "",
+    ...review.comments.map((comment) => `- \`${comment.path}:${comment.line}\` ${comment.body}`)
+  ].join("\n") : "";
   await dependencies.repoHost.submitReview({
     repository,
     number: pullRequest.number,
@@ -28860,8 +28868,8 @@ async function postReview(dependencies, pullRequest, repository, review) {
     })}
 **boardwright review** \xB7 ${heading}
 
-${review.summary}`,
-    comments: review.comments,
+${review.summary}${suggestions}`,
+    comments: isApproved ? [] : review.comments,
     event: reviewEvent(review)
   });
 }

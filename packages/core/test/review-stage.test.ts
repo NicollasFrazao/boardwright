@@ -152,6 +152,31 @@ describe('the review stage', () => {
     expect(world.repoHost.reviews[0]?.event).toBe(event);
   });
 
+  it('puts an approval\'s line comments in the body as suggestions, so they open no thread', async () => {
+    const world = reviewWorld();
+
+    world.agent.result = {
+      ...world.agent.result,
+      review: {
+        verdict: 'approve',
+        comments: [
+          {
+            path: 'src/feature.ts',
+            line: 3,
+            body: 'Optional: name this constant.',
+          },
+        ],
+      },
+    };
+
+    await tick(world.dependencies);
+
+    const [review] = world.repoHost.reviews;
+
+    expect(review?.comments).toEqual([]);
+    expect(review?.body).toContain('**Suggestions** (optional, not blocking):\n\n- `src/feature.ts:3` Optional: name this constant.');
+  });
+
   it('does not review the same head twice, and reviews again after a new push', async () => {
     const world = reviewWorld();
 

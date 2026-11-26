@@ -130,7 +130,18 @@ async function postReview(
     readonly isApproving: boolean;
   },
 ): Promise<void> {
-  const heading = review.verdict === 'approve' ? 'no changes needed' : 'changes needed';
+  const isApproved = review.verdict === 'approve';
+  const heading = isApproved ? 'no changes needed' : 'changes needed';
+
+  // An approval's line comments are suggestions: as threads they would block the merge policy (zero
+  // unresolved threads) and start a feedback round for each nit. They go in the body instead.
+  const suggestions = isApproved && review.comments.length > 0 ? [
+    '',
+    '',
+    '**Suggestions** (optional, not blocking):',
+    '',
+    ...review.comments.map((comment) => `- \`${comment.path}:${comment.line}\` ${comment.body}`),
+  ].join('\n') : '';
 
   await dependencies.repoHost.submitReview({
     repository,
@@ -139,8 +150,8 @@ async function postReview(
     body: `${formatReviewMarker({
       verdict: review.verdict,
       headSha: pullRequest.headSha,
-    })}\n**boardwright review** · ${heading}\n\n${review.summary}`,
-    comments: review.comments,
+    })}\n**boardwright review** · ${heading}\n\n${review.summary}${suggestions}`,
+    comments: isApproved ? [] : review.comments,
     event: reviewEvent(review),
   });
 }
