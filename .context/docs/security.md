@@ -42,7 +42,11 @@ the people who could have made the change themselves.
   `BOARDWRIGHT_MERGE_TOKEN`, either separate from the token that opened the pull request; `once` refuses
   to run a config with a merge stage without one. The App's key is read from a file or a secret, never
   stored by boardwright, and its installation tokens last an hour; the key's variable is removed from the
-  agent's environment, and the agent's sandbox denies reading `~/.config/boardwright`. The merger merges at the
+  agent's environment, and the agent's sandbox denies reading `~/.config/boardwright`.
+- **The App writes as the pipeline:** with an App, the run markers, the plan, the notices, the reviews and
+  the resolved threads go out as `<app>[bot]`; the board, the push and the pull request stay on the main
+  token (GitHub Apps cannot reach a personal account's Projects v2, and the App must not be the author of
+  the pull requests it may approve). The merger merges at the
   evaluated head commit (`sha`), so a push after the evaluation fails the merge instead of merging
   unchecked commits, and it never bypasses the ruleset: it falls back to native auto-merge.
 - **Markers come only from the pipeline:** run markers in issue comments and review markers in pull

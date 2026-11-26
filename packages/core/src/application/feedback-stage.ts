@@ -148,7 +148,10 @@ async function addressIn(
   const resolved = [...new Set(result.addressedThreadIds)].filter((id) => known.has(id));
 
   for (const threadId of resolved) {
-    await dependencies.repoHost.resolveThread(threadId);
+    await dependencies.repoHost.resolveThread(
+      round.workspace.repository,
+      threadId,
+    );
   }
 
   return outcome(

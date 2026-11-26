@@ -223,10 +223,11 @@ interface RecentIssuesQuery {
 /** Who else acts on the repository host. */
 export interface GitHubRepoHostOptions {
   /**
-   * The client that submits reviews, per repository: a GitHub App's installation (ADR 0005), so a review can
-   * approve a pull request that the main token opened. Without it, reviews go out on the main client.
+   * The client the pipeline writes as, per repository: a GitHub App's installation (ADR 0005). It posts the
+   * comments and the run markers, submits the reviews (so one can approve a pull request the main token
+   * opened) and resolves threads. Without it, all of that goes out on the main client.
    */
-  readonly reviewer?: (repository: string) => Promise<GitHubClient>;
+  readonly actor?: (repository: string) => Promise<GitHubClient>;
 
   /**
    * The logins of the pipeline's other identities, such as its GitHub App's bot. Markers count only when the
@@ -255,7 +256,7 @@ const REVIEW_EVENTS = {
 export class GitHubRepoHost implements RepoHostPort {
   private readonly client: GitHubClient;
 
-  private readonly reviewer: GitHubRepoHostOptions['reviewer'];
+  private readonly actor: GitHubRepoHostOptions['actor'];
 
   private readonly trustedAuthors: GitHubRepoHostOptions['trustedAuthors'];
 
@@ -266,8 +267,13 @@ export class GitHubRepoHost implements RepoHostPort {
     options: GitHubRepoHostOptions = {},
   ) {
     this.client = client;
-    this.reviewer = options.reviewer;
+    this.actor = options.actor;
     this.trustedAuthors = options.trustedAuthors;
+  }
+
+  /** The client the pipeline writes as on the repository: its App's installation, else the main client. */
+  private async actorFor(repository: string): Promise<GitHubClient> {
+    return this.actor === undefined ? this.client : await this.actor(repository);
   }
 
   /**
@@ -440,12 +446,14 @@ export class GitHubRepoHost implements RepoHostPort {
     }));
   }
 
-  /** Posts a comment on the issue. */
+  /** Posts a comment on the issue, as the pipeline's actor. */
   async addComment(
     ref: IssueRef,
     body: string,
   ): Promise<void> {
-    await this.client.rest.issues.createComment({
+    const client = await this.actorFor(ref.repository);
+
+    await client.rest.issues.createComment({
       ...splitRepository(ref.repository),
       issue_number: ref.number,
       body,
@@ -555,8 +563,13 @@ export class GitHubRepoHost implements RepoHostPort {
   }
 
   /** Marks a review thread resolved. */
-  async resolveThread(threadId: string): Promise<void> {
-    await this.client.graphql(
+  async resolveThread(
+    repository: string,
+    threadId: string,
+  ): Promise<void> {
+    const client = await this.actorFor(repository);
+
+    await client.graphql(
       RESOLVE_THREAD_MUTATION,
       { id: threadId },
     );
@@ -640,15 +653,15 @@ export class GitHubRepoHost implements RepoHostPort {
   }
 
   /**
-   * Posts a review with its line comments, as a comment, an approval or a change request, on the reviewer's
-   * client when there is one.
+   * Posts a review with its line comments, as a comment, an approval or a change request, as the pipeline's
+   * actor.
    *
    * @remarks
    * GitHub rejects the whole review (422) when one comment points at a line outside the diff; the review is
    * then posted again with the comments in its body, so no finding is lost.
    */
   async submitReview(review: ReviewDraft): Promise<void> {
-    const client = this.reviewer === undefined ? this.client : await this.reviewer(review.repository);
+    const client = await this.actorFor(review.repository);
 
     const target = {
       ...splitRepository(review.repository),
