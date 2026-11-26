@@ -153,6 +153,8 @@ provider:
     enabled: true                # needs bubblewrap and socat on Linux; a session refuses to start without them
     # allowedDomains:            # the hosts commands may reach; default: npm, PyPI, Packagist and GitHub's download hosts
     #   - registry.npmjs.org
+    # allowUnixSockets: false    # true lets commands reach Unix sockets, such as a test database's; Docker and the
+    #                            # session's agents stay hidden (on Linux the sandbox cannot allow one socket by path)
 git:
   # author:                      # who the agent's commits are attributed to; default: git's own config
   #   name: boardwright
