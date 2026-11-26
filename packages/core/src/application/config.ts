@@ -234,6 +234,13 @@ export const pipelineConfigSchema = z.object({
     sandbox: z.object({
       enabled: z.boolean().default(true),
       allowedDomains: z.array(z.string().min(1)).default([...DEFAULT_SANDBOX_DOMAINS]),
+
+      /**
+       * Lets commands connect to Unix sockets, such as a test database's. On Linux the sandbox cannot allow
+       * one socket by path, so this allows every socket the files let a command reach, and the provider
+       * hides the dangerous ones (Docker, the session's agents).
+       */
+      allowUnixSockets: z.boolean().default(false),
     }).strict().prefault({}),
   }).strict().prefault({}),
   git: z.object({

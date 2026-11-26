@@ -74,7 +74,11 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
   usual credential files of the machine's home (the GitHub CLI's token, boardwright's App key, SSH and
   cloud keys, registry tokens), they reach only the listed hosts, and they cannot retry outside the
   sandbox. On Linux it needs `bubblewrap` and `socat`; without them the session refuses to start rather
-  than run unsandboxed;
+  than run unsandboxed. `allowUnixSockets` (off by default) lets commands reach Unix sockets, such as a
+  test database's; because the Linux sandbox cannot allow one socket by path, it allows every socket the
+  files let a command reach, and the provider hides the dangerous ones: Docker and containerd, the
+  user's runtime directories (the Claude sessions, D-Bus, GnuPG, SSH agents), the system D-Bus, X11,
+  snapd, and the directory of `SSH_AUTH_SOCK`;
 - the environment without `BOARDWRIGHT_GITHUB_TOKEN`, `BOARDWRIGHT_MERGE_TOKEN`, `BOARDWRIGHT_APP_PRIVATE_KEY`,
   `GITHUB_TOKEN` and `GH_TOKEN`;
 - only the project's settings (`settingSources: ['project']`), not the machine user's;

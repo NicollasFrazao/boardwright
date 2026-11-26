@@ -7387,6 +7387,7 @@ import {
 // packages/agent-claude/src/claude-provider.ts
 import { existsSync } from "node:fs";
 import {
+  dirname,
   isAbsolute,
   join,
   relative
@@ -27457,7 +27458,13 @@ var pipelineConfigSchema = external_exports.object({
     /** Runs the agent's shell commands in the provider's sandbox: no credential files, only the listed hosts. */
     sandbox: external_exports.object({
       enabled: external_exports.boolean().default(true),
-      allowedDomains: external_exports.array(external_exports.string().min(1)).default([...DEFAULT_SANDBOX_DOMAINS])
+      allowedDomains: external_exports.array(external_exports.string().min(1)).default([...DEFAULT_SANDBOX_DOMAINS]),
+      /**
+       * Lets commands connect to Unix sockets, such as a test database's. On Linux the sandbox cannot allow
+       * one socket by path, so this allows every socket the files let a command reach, and the provider
+       * hides the dangerous ones (Docker, the session's agents).
+       */
+      allowUnixSockets: external_exports.boolean().default(false)
     }).strict().prefault({})
   }).strict().prefault({}),
   git: external_exports.object({
@@ -29879,6 +29886,19 @@ var WRITE_TOOLS = [
   "MultiEdit",
   "NotebookEdit"
 ];
+var DANGEROUS_SOCKET_PATHS = [
+  "/var/run/docker.sock",
+  "/run/docker.sock",
+  "/run/containerd",
+  "/var/run/containerd",
+  "/run/user",
+  "/run/dbus",
+  "/var/run/dbus",
+  // eslint-disable-next-line sonarjs/publicly-writable-directories -- a path hidden from the agent, never written to
+  "/tmp/.X11-unix",
+  "/run/snapd.socket",
+  "/run/snapd-snap.socket"
+];
 var ClaudeAgentProvider = class {
   query;
   environment;
@@ -29970,7 +29990,12 @@ var ClaudeAgentProvider = class {
         }]
       },
       mcpServers,
-      ...this.sandbox?.enabled === true ? { sandbox: sandboxSettings(this.sandbox) } : {},
+      ...this.sandbox?.enabled === true ? {
+        sandbox: sandboxSettings(
+          this.sandbox,
+          this.environment
+        )
+      } : {},
       env: withoutTokens(this.environment),
       abortController: abort,
       persistSession: false
@@ -30068,13 +30093,32 @@ function deny(reason) {
     }
   };
 }
-function sandboxSettings(sandbox) {
+function sandboxSettings(sandbox, environment = {}) {
+  if (sandbox.allowUnixSockets !== true) {
+    return {
+      enabled: true,
+      failIfUnavailable: true,
+      allowUnsandboxedCommands: false,
+      filesystem: { denyRead: [...CREDENTIAL_PATHS] },
+      network: { allowedDomains: [...sandbox.allowedDomains] }
+    };
+  }
+  const sshAgent = environment.SSH_AUTH_SOCK;
   return {
     enabled: true,
     failIfUnavailable: true,
     allowUnsandboxedCommands: false,
-    filesystem: { denyRead: [...CREDENTIAL_PATHS] },
-    network: { allowedDomains: [...sandbox.allowedDomains] }
+    filesystem: {
+      denyRead: [
+        ...CREDENTIAL_PATHS,
+        ...DANGEROUS_SOCKET_PATHS,
+        ...sshAgent === void 0 || sshAgent === "" ? [] : [dirname(sshAgent)]
+      ]
+    },
+    network: {
+      allowedDomains: [...sandbox.allowedDomains],
+      allowAllUnixSockets: true
+    }
   };
 }
 function withoutTokens(environment) {
@@ -35606,7 +35650,7 @@ import {
   rm as rm2,
   writeFile
 } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname as dirname2 } from "node:path";
 function isProcessAlive(pid) {
   try {
     process.kill(
@@ -35620,7 +35664,7 @@ function isProcessAlive(pid) {
 }
 async function acquireFileLock(path, pid = process.pid, isAlive = isProcessAlive) {
   await mkdir2(
-    dirname(path),
+    dirname2(path),
     { recursive: true }
   );
   for (let attempt2 = 0; attempt2 < 2; attempt2 += 1) {
