@@ -84,7 +84,7 @@ The Claude provider (`packages/agent-claude/src/claude-provider.ts`) starts ever
   change request, and the agent's approval stands in for a person's review.
 - for address-feedback, the review comments and check names are fenced as input like the issue, and
   only the core resolves threads: the agent names the ones it addressed, and the core resolves those
-  that were in the feedback it read.
+  that were in the feedback it read, with or without a commit (a thread can need no change).
 
 The git workspaces give the token to the runner's own `clone`, `fetch` and `push` through the commands'
 `GIT_CONFIG_*` environment; it is never written to `.git/config`, so the agent cannot read it, and its own
