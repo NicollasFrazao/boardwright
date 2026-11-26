@@ -45,6 +45,10 @@ the people who could have made the change themselves.
   agent's environment, and the agent's sandbox denies reading `~/.config/boardwright`. The merger merges at the
   evaluated head commit (`sha`), so a push after the evaluation fails the merge instead of merging
   unchecked commits, and it never bypasses the ruleset: it falls back to native auto-merge.
+- **Markers come only from the pipeline:** run markers in issue comments and review markers in pull
+  request reviews count only when the account of the pipeline's token or its GitHub App wrote them.
+  Anyone else's comment or review that carries a marker is ignored, so nobody can forge a run's history
+  or a review's verdict.
 - **Merge gatekeeper (`mode: agent`):** a read-only session asked only after the policy passed. It can
   veto a merge, never force one, and the policy is judged again after it before anything is merged.
 - **Agent credentials:** only the Agent SDK's documented methods (`ANTHROPIC_API_KEY`, Bedrock, Claude

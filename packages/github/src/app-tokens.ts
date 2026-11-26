@@ -137,6 +137,14 @@ export class GitHubAppTokens implements AppInstallationsPort {
     }
   }
 
+  /** The login the App acts as, `<slug>[bot]`: the author of what it writes. */
+  async botLogin(): Promise<string> {
+    const app = await this.appClient();
+    const { data } = await app.rest.apps.getAuthenticated();
+
+    return `${data?.slug ?? ''}[bot]`;
+  }
+
   private async installationIdOf(repository: string): Promise<number> {
     const { owner } = splitRepository(repository);
     const known = this.installations.get(owner);
